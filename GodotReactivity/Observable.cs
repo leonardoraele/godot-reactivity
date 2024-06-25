@@ -8,7 +8,7 @@ public abstract class Observable : IDisposable
 
 	public event Action? Changed;
 
-    protected void NotifyChanged() {
+    public void NotifyChanged() {
 		this.Dirty = true;
 		this.Changed?.Invoke();
 	}

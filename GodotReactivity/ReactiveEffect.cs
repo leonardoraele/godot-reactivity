@@ -23,6 +23,8 @@ public partial class ReactiveEffect : IDisposable
 		return effect;
 	}
 
+	public void ForceRerun() => this._context?.NotifyChanged();
+
     private void Run()
 	{
 		this._context?.Dispose();

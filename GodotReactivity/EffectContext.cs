@@ -8,8 +8,10 @@ public class EffectContext : Observable
 
     public T Read<T>(Observable<T> observable)
 	{
-		this.Dependencies.Add(observable);
-		observable.Changed += this.NotifyChanged;
+		if (!this.Dependencies.Contains(observable)) {
+			this.Dependencies.Add(observable);
+			observable.Changed += this.NotifyChanged;
+		}
 		return observable.ReadUntracked();
 	}
 
