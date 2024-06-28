@@ -27,6 +27,9 @@ public partial class ReactiveEffect : IDisposable
 
     private void Run()
 	{
+		if (this._context?.Dirty == false) {
+			return;
+		}
 		this._context?.Dispose();
 		this._context = new();
 		this._context.Changed += () => this._runCallable.CallDeferred();
