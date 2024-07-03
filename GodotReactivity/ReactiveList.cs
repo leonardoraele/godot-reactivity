@@ -4,11 +4,11 @@ using System.Collections.ObjectModel;
 
 namespace Raele.GodotReactivity;
 
-public class ReactiveList<T> : Observable<ObservableCollection<T>>, ICollection<T>
+public class ReactiveList<T> : Observable<ObservableCollection<T>>, ICollection<T>, IReadOnlyCollection<T>
 {
 	private ObservableCollection<T> _collection = new();
 
-    public int Count => throw new System.NotImplementedException();
+    public int Count => this._collection.Count;
 
     public bool IsReadOnly => throw new System.NotImplementedException();
 
