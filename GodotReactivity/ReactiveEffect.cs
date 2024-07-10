@@ -5,18 +5,18 @@ namespace Raele.GodotReactivity;
 
 public partial class ReactiveEffect : IDisposable
 {
-    private Action<EffectContext> _effectAction;
+    private Action _effectAction;
     private EffectContext? _context;
 	private Callable _runCallable;
 
-    public ReactiveEffect(Action<EffectContext> action)
+    public ReactiveEffect(Action action)
 	{
 		this._effectAction = action;
 		this._runCallable = Callable.From(this.Run);
 		this.Run();
 	}
 
-	public static ReactiveEffect CreateInContext(Node node, Action<EffectContext> action)
+	public static ReactiveEffect CreateInContext(Node node, Action action)
 	{
 		ReactiveEffect effect = new(action);
 		node.TreeExiting += effect.Dispose;
@@ -33,7 +33,7 @@ public partial class ReactiveEffect : IDisposable
 		this._context?.Dispose();
 		this._context = new();
 		this._context.Changed += () => this._runCallable.CallDeferred();
-		this._effectAction(this._context);
+		this._context.Run(this._effectAction);
 	}
 
 	public void Dispose()

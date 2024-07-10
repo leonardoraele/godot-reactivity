@@ -7,13 +7,16 @@ public class ReactiveState<T> : Observable<T>
 	private T _state;
     private EqualityComparer<T> _equalityComparer;
 
-    public override T ReadUntracked() => this._state;
-
-	public void Write(T value)
-	{
-		if (this._equalityComparer.Equals(this._state, value) == false) {
-			this._state = value;
-			this.NotifyChanged();
+	public override T Value {
+		get {
+			this.NotifyUsed();
+			return this._state;
+		}
+		set {
+			if (this._equalityComparer.Equals(this._state, value) == false) {
+				this._state = value;
+				this.NotifyChanged();
+			}
 		}
 	}
 

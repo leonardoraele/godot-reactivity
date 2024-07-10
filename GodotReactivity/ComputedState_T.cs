@@ -6,21 +6,26 @@ namespace Raele.GodotReactivity;
 public class ComputedState<T> : Observable<T>
 {
 	private EffectContext? _context { get; set; }
-	private Func<EffectContext, T> _computationFunc;
+	private Func<T> _computationFunc;
 	private T _valueCache;
 
-	public override T ReadUntracked() =>
-		this._context?.Dirty == true
-			? this.ComputeValue()
-			: this._valueCache;
+	public override T Value {
+		get {
+			this.NotifyUsed();
+			return this._context?.Dirty == true
+				? this.ComputeValue()
+				: this._valueCache;
+		}
+		set => GD.PushWarning("Tried to set a value on a ComputedState, which is read-only. Assigned will be ignored.");
+	}
 
-	public ComputedState(Func<EffectContext, T> func)
+	public ComputedState(Func<T> func)
 	{
 		this._computationFunc = func;
 		this._valueCache = this.ComputeValue();
 	}
 
-	public static ComputedState<U> CreateInContext<U>(Node bind, Func<EffectContext, U> func)
+	public static ComputedState<U> CreateInContext<U>(Node bind, Func<U> func)
 	{
 		ComputedState<U> state = new(func);
 		bind.TreeExiting += state.Dispose;
@@ -32,7 +37,8 @@ public class ComputedState<T> : Observable<T>
 		this._context?.Dispose();
 		this._context = new();
 		this._context.Changed += this.NotifyChanged;
-		return this._valueCache = this._computationFunc(this._context);
+		this._context.Run(() => this._valueCache = this._computationFunc());
+		return this._valueCache;
 	}
 
 	public override void Dispose()

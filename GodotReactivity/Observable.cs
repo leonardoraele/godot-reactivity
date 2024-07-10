@@ -8,6 +8,12 @@ public abstract class Observable : IDisposable
 
 	public event Action? Changed;
 
+	public void NotifyUsed() {
+		if (EffectContext.TryGetContext(out EffectContext? context)) {
+			context.AddDependency(this);
+		}
+	}
+
     public void NotifyChanged() {
 		this.Dirty = true;
 		this.Changed?.Invoke();

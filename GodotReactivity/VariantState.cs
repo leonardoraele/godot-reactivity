@@ -10,13 +10,16 @@ public class VariantState : Observable<Variant>
 		this._state = initialValue;
 	}
 
-    public override Variant ReadUntracked() => this._state;
-
-	public void Write(Variant value)
-	{
-		if (value.Equals(this._state) == false) {
-			this._state = value;
-			this.NotifyChanged();
+	public override Variant Value {
+		get {
+			this.NotifyUsed();
+			return this._state;
+		}
+		set {
+			if (!value.Equals(this._state)) {
+				this._state = value;
+				this.NotifyChanged();
+			}
 		}
 	}
 }
