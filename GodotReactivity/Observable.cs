@@ -4,18 +4,17 @@ namespace Raele.GodotReactivity;
 
 public abstract class Observable : IDisposable
 {
-	public bool Dirty { get; private set; } = false;
-
 	public event Action? Changed;
 
-	public void NotifyUsed() {
+	public void NotifyUsed()
+	{
 		if (EffectContext.TryGetContext(out EffectContext? context)) {
 			context.AddDependency(this);
 		}
 	}
 
-    public void NotifyChanged() {
-		this.Dirty = true;
+    public virtual void NotifyChanged()
+	{
 		this.Changed?.Invoke();
 	}
 

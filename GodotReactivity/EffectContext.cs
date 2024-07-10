@@ -23,7 +23,14 @@ public class EffectContext : Observable
 		return context != null;
 	}
 
+	public bool Dirty { get; private set; } = false;
 	private HashSet<Observable> Dependencies = new();
+
+	public override void NotifyChanged()
+	{
+		base.NotifyChanged();
+		this.Dirty = true;
+	}
 
 	public void AddDependency(Observable observable)
 	{
