@@ -1,13 +1,20 @@
 using System;
+using System.Threading;
 using Godot;
 
 namespace Raele.GodotReactivity;
 
-public partial class ReactiveEffect : IDisposable
+public class ReactiveEffect : IDisposable
 {
     private Action _effectAction;
     private EffectContext? _context;
 	private Callable _runCallable;
+
+	public bool Enabled = true;
+
+	public CancellationToken? Token {
+		init => value?.Register(this.Dispose);
+	}
 
     public ReactiveEffect(Action action)
 	{
@@ -23,7 +30,23 @@ public partial class ReactiveEffect : IDisposable
 		return effect;
 	}
 
-	public void ForceRerun() => this._context?.NotifyChanged();
+	public void ForceRerun(bool deferred = true)
+	{
+		this._context?.Dispose();
+		this._context = null;
+		this.SafeRerun(deferred);
+	}
+
+	public void SafeRerun(bool deferred = true)
+	{
+		if (deferred) {
+			this.RunDeferred();
+		} else {
+			this.Run();
+		}
+	}
+
+	private void RunDeferred() => this._runCallable.CallDeferred();
 
     private void Run()
 	{
@@ -31,8 +54,12 @@ public partial class ReactiveEffect : IDisposable
 			return;
 		}
 		this._context?.Dispose();
-		this._context = new();
-		this._context.Changed += () => this._runCallable.CallDeferred();
+        this._context = new();
+        this._context.Changed += () => {
+			if (this.Enabled) {
+				this.RunDeferred();
+			}
+		};
 		this._context.Run(this._effectAction);
 	}
 

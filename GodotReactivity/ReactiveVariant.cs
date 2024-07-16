@@ -2,13 +2,12 @@ using Godot;
 
 namespace Raele.GodotReactivity;
 
-public class VariantState : Observable<Variant>
+public class ReactiveVariant : Observable<Variant>
 {
 	private Variant _state;
 
-    public VariantState(Variant initialValue) {
-		this._state = initialValue;
-	}
+	public ReactiveVariant() {}
+    public ReactiveVariant(Variant initialValue) => this._state = initialValue;
 
 	public override Variant Value {
 		get {
