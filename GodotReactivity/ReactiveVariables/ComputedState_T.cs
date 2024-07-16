@@ -19,6 +19,8 @@ public class ComputedState<T> : Observable<T>
 		set => GD.PushWarning("Tried to set a value on a ComputedState, which is read-only. Assigned will be ignored.");
 	}
 
+	public static implicit operator T(ComputedState<T> computedState) => computedState.Value;
+
 	public ComputedState(Func<T> func)
 	{
 		this._computationFunc = func;
