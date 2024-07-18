@@ -125,7 +125,7 @@ public partial class SynchronizedList : SynchronizedNode, ICollection<Synchroniz
 		get => this.ChildrenCache[index];
 		set => throw new InvalidOperationException();
 	}
-	public void Add(SynchronizedNode item) => this.AddChild(item, true);
+	public void Add(SynchronizedNode item) => this.AddChild(item, forceReadableName: true);
 	public void Clear()
 	{
 		while (this.Count > 0) {

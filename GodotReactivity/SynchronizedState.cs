@@ -37,7 +37,7 @@ public partial class SynchronizedState : SynchronizedNode
 	// FIELDS
 	// -----------------------------------------------------------------------------------------------------------------
 
-    public ReactiveVariant SharedState { get; private set; } = new();
+    public ReactiveVariant<Variant> SharedState { get; private set; } = new(new());
     private ReactiveEffect SynchronizationEffect = null!;
 
 	// -----------------------------------------------------------------------------------------------------------------
@@ -77,6 +77,7 @@ public partial class SynchronizedState : SynchronizedNode
 			// SharedState.Value won't be referenced, and the effect will never rerun.
 			this.SharedState.NotifyUsed();
 			if (!isInConstructor) {
+				GD.PrintS(this.Multiplayer.GetUniqueId(), nameof(SynchronizedState), MethodName.RpcSetValue, this.GetPath(), this.SharedState.Value);
 				this.Rpc(MethodName.RpcSetValue, this.SharedState.Value);
 			}
 		});
@@ -99,6 +100,7 @@ public partial class SynchronizedState : SynchronizedNode
 	// METHODS
 	// -----------------------------------------------------------------------------------------------------------------
 
+	[Rpc(MultiplayerApi.RpcMode.AnyPeer)]
 	protected override void RpcSetValue(Variant newValue)
 	{
 		this.SynchronizationEffect.Enabled = false;

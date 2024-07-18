@@ -68,4 +68,17 @@ public class ReactiveEffect : IDisposable
 		this._context?.Dispose();
 		this._context = null;
 	}
+
+	public IDisposable DisabledContext()
+	{
+		this.Enabled = false;
+		return new EffectDisableContext(() => this.Enabled = true);
+	}
+
+	public class EffectDisableContext : IDisposable
+	{
+        private Action OnDisposed;
+		public EffectDisableContext(Action onDisposed) => this.OnDisposed = onDisposed;
+		public void Dispose() => this.OnDisposed();
+	}
 }
