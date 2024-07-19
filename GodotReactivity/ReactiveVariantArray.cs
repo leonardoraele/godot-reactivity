@@ -14,6 +14,9 @@ public class ReactiveVariantArray
 	public ReactiveVariantArray() : base(new()) { }
 	public ReactiveVariantArray(IEnumerable<Variant> values) : base(new(values)) { }
 
+	public static implicit operator Godot.Collections.Array(ReactiveVariantArray array)
+		=> new(array);
+
 	public Variant this[int index] {
 		get {
             this.ThrowIfIndexIsOutOfRange(index);

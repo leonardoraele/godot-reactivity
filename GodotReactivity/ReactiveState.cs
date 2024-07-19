@@ -7,6 +7,8 @@ public class ReactiveState<T> : Observable<T>
 	private T _state;
     private EqualityComparer<T> _equalityComparer;
 
+	public static implicit operator T(ReactiveState<T> reactiveState) => reactiveState.Value;
+
 	public override T Value {
 		get {
 			this.NotifyUsed();

@@ -24,6 +24,8 @@ public class ReactiveList<T> : Observable<Collection<T>>, ICollection<T>, IReadO
 		this._collection.CollectionChanged += (_sender, _args) => this.NotifyChanged();
 	}
 
+    public static implicit operator Collection<T>(ReactiveList<T> list) => new(list);
+
     // -----------------------------------------------------------------------------------------------------------------
 	// INTERFACE IMPLEMENTATIONS
     // -----------------------------------------------------------------------------------------------------------------

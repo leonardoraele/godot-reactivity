@@ -13,6 +13,8 @@ public class ReactiveVariant<[MustBeVariant] T> : ReactiveVariant
 		set => this.Value = value.As<T>();
 	}
 
+	public static implicit operator T(ReactiveVariant<T> reactiveVariant) => reactiveVariant.Value;
+
     public T Value {
 		get {
 			this.NotifyUsed();
