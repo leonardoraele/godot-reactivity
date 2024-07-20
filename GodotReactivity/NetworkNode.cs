@@ -28,22 +28,22 @@ public partial class NetworkNode : Node
 	private uint DirtyFlag = 0;
 	private bool IsUpdatingStates = false;
 
-	// -----------------------------------------------------------------------------------------------------------------
-	// PROPERTIES
-	// -----------------------------------------------------------------------------------------------------------------
+    // -----------------------------------------------------------------------------------------------------------------
+    // PROPERTIES
+    // -----------------------------------------------------------------------------------------------------------------
 
 
-	// -----------------------------------------------------------------------------------------------------------------
-	// SIGNALS
-	// -----------------------------------------------------------------------------------------------------------------
+    // -----------------------------------------------------------------------------------------------------------------
+    // SIGNALS
+    // -----------------------------------------------------------------------------------------------------------------
 
-	// [Signal] public delegate void EventHandler()
+    // [Signal] public delegate void EventHandler()
 
-	// -----------------------------------------------------------------------------------------------------------------
-	// INTERNAL TYPES
-	// -----------------------------------------------------------------------------------------------------------------
+    // -----------------------------------------------------------------------------------------------------------------
+    // INTERNAL TYPES
+    // -----------------------------------------------------------------------------------------------------------------
 
-	[AttributeUsage(AttributeTargets.Field)]
+    [AttributeUsage(AttributeTargets.Field)]
 	public class SynchronizedAttribute : Attribute {}
 
 	// -----------------------------------------------------------------------------------------------------------------
@@ -55,13 +55,13 @@ public partial class NetworkNode : Node
 	public override void _EnterTree()
 	{
 		base._EnterTree();
-		SynchronizedStateServer.Instance.PeerSceneChanged += OnPeerSceneChanged;
+		NetworkManager.Instance.PeerSceneChanged += OnPeerSceneChanged;
 	}
 
     public override void _ExitTree()
     {
         base._ExitTree();
-		SynchronizedStateServer.Instance.PeerSceneChanged -= OnPeerSceneChanged;
+		NetworkManager.Instance.PeerSceneChanged -= OnPeerSceneChanged;
     }
 
     // public override void _Ready()
@@ -103,7 +103,7 @@ public partial class NetworkNode : Node
 	private void SynchronizeState(ReactiveVariant state)
 	{
 		int stateIndex = this.Observables.Count;
-		GD.PrintS(SynchronizedStateServer.NetId, "[NetworkNode] Found a synchronized state field. Index:", stateIndex);
+		GD.PrintS(NetworkManager.NetId, "[NetworkNode] Found a synchronized state field. Index:", stateIndex);
 		state.Changed += () => {
 			if (!this.IsUpdatingStates) {
 				this.MarkDirty(stateIndex);
@@ -114,11 +114,11 @@ public partial class NetworkNode : Node
 
 	private void OnPeerSceneChanged(ConnectedPeer peer)
 	{
-		GD.PrintS(SynchronizedStateServer.NetId, nameof(NetworkNode), nameof(OnPeerSceneChanged), new { peerId = peer.Id, IsMultiplayerAuthority = IsMultiplayerAuthority(), LocalCurrentScene = this.GetTree().CurrentScene?.GetPath(), PeerCurrentScene = peer.CurrentScene.Value });
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkNode), nameof(OnPeerSceneChanged), new { peerId = peer.Id, IsMultiplayerAuthority = IsMultiplayerAuthority(), LocalCurrentScene = this.GetTree().CurrentScene?.GetPath(), PeerCurrentScene = peer.CurrentScene.Value });
 		if (this.IsMultiplayerAuthority() && this.GetTree().CurrentScene.GetPath() == peer.CurrentScene.Value) {
 			// TODO Since we are marking all states as dirty, the states will be sent to all connected peers. Instead,
 			// we should send it only to the peer who changed scene.
-			this.MarkDirty(uint.MaxValue);
+			this.ForceBroadcastSynchronizedStates();
 		}
 	}
 
@@ -131,15 +131,18 @@ public partial class NetworkNode : Node
 			Callable.From(this.BroadcastStates).CallDeferred();
 		}
 		this.DirtyFlag |= dirtyFlags;
-		GD.PrintS(SynchronizedStateServer.NetId, "[NetworkNode] State dirtied.");
+		GD.PrintS(NetworkManager.NetId, "[NetworkNode] State dirtied.");
 	}
+
+	public void ForceBroadcastSynchronizedStates()
+		=> this.MarkDirty(uint.MaxValue);
 
 	private void BroadcastStates()
 	{
 		if (
 			this.DirtyFlag == 0
-			|| SynchronizedStateServer.Instance.ConnectionState.Value
-				== SynchronizedStateServer.ConnectionStateEnum.Offline
+			|| NetworkManager.Instance.ConnectionState.Value
+				== NetworkManager.ConnectionStateEnum.Offline
 		) {
 			return;
 		}
@@ -149,16 +152,18 @@ public partial class NetworkNode : Node
 				.Select(observable => observable.VariantValue)
 		);
 		if (newValues.Count != 0) {
-			GD.PrintS(SynchronizedStateServer.NetId, "[NetworkNode] Found dirty values to update. Values:", newValues);
+			GD.PrintS(NetworkManager.NetId, "[NetworkNode] Found dirty values to update. Values:", newValues);
 			if (this.IsMultiplayerAuthority()) {
-				foreach (long peerId in SynchronizedStateServer.Instance.PeersInScene.Select(peer => peer.Id)) {
-					GD.PrintS(SynchronizedStateServer.NetId, "[NetworkNode] Sending state update to peer. Id:", peerId);
+				foreach (long peerId in NetworkManager.Instance.PeersInScene.Select(peer => peer.Id)) {
+					GD.PrintS(NetworkManager.NetId, "[NetworkNode] Sending state update to peer. Id:", peerId);
 					this.RpcId(peerId, MethodName.RpcUpdateStates, this.DirtyFlag, newValues);
 				}
 			} else {
-				GD.PrintS(SynchronizedStateServer.NetId, "[NetworkNode] Sending states to authority.");
+				GD.PrintS(NetworkManager.NetId, "[NetworkNode] Sending states to authority.");
 				this.RpcId(this.GetMultiplayerAuthority(), MethodName.RpcUpdateStates, this.DirtyFlag, newValues);
 			}
+		} else {
+			GD.PrintS(NetworkManager.NetId, "[NetworkNode] Tried to broadcast states, but there are no dirty values to send.");
 		}
 		this.DirtyFlag = 0;
 	}
@@ -166,14 +171,14 @@ public partial class NetworkNode : Node
 	[Rpc(MultiplayerApi.RpcMode.AnyPeer)]
 	private void RpcUpdateStates(uint dirtyFlags, Godot.Collections.Array values)
 	{
-		GD.PrintS(SynchronizedStateServer.NetId, "[NetworkNode] Received state update. Sender:", this.Multiplayer?.GetRemoteSenderId(), "Values:", values);
+		GD.PrintS(NetworkManager.NetId, "[NetworkNode] Received state update. Sender:", this.Multiplayer?.GetRemoteSenderId(), "Values:", values);
 		foreach (
 			(ReactiveVariant observable, int index)
 			in this.Observables.Where((_, index) => (dirtyFlags & (1u << index)) != 0)
 				.Select((observable, index) => (observable, index))
 		) {
 			this.IsUpdatingStates = true;
-			GD.PrintS(SynchronizedStateServer.NetId, "[NetworkNode] Update performed.");
+			GD.PrintS(NetworkManager.NetId, "[NetworkNode] Update performed.");
 			observable.VariantValue = values[index];
 			this.IsUpdatingStates = false;
 		}

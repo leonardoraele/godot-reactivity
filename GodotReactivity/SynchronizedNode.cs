@@ -59,7 +59,7 @@ public abstract partial class SynchronizedNode : Node
 		base._Ready();
 		// if (this.GetParent() is not SynchronizedNode) {
 			if (this.IsMultiplayerAuthority()) {
-				SynchronizedStateServer.Instance.BroadcastState(this);
+				NetworkManager.Instance.BroadcastState(this);
 			} else {
 				this.RpcId(this.GetMultiplayerAuthority(), MethodName.RpcRequestValueUpdate);
 			}

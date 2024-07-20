@@ -2,7 +2,8 @@ using Godot;
 
 namespace Raele.GodotReactivity;
 
-public interface IVariantConvertible
+public interface IVariantConverter<T>
 {
-	public Variant ToVariant();
+	public abstract static Variant ToVariant(T subject);
+	public abstract static T FromVariant(Variant variant);
 }

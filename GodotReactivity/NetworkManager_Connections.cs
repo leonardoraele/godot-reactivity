@@ -1,14 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Godot;
-using Raele.PocketWars;
 
 namespace Raele.GodotReactivity;
 
-public partial class SynchronizedStateServer : Node
+public partial class NetworkManager : Node
 {
 	// -----------------------------------------------------------------------------------------------------------------
 	// STATICS
@@ -16,9 +14,6 @@ public partial class SynchronizedStateServer : Node
 
 	public const string SERVER_BIND_ADDRESS = "*";
 	public const int DEFAULT_PORT = 3000;
-
-	public static SynchronizedStateServer Instance { get; private set; } = null!;
-	public static string NetId = string.Join("", Guid.NewGuid().ToString().TakeLast(8));
 
 	// -----------------------------------------------------------------------------------------------------------------
 	// EXPORTS
@@ -30,25 +25,24 @@ public partial class SynchronizedStateServer : Node
 	// FIELDS
 	// -----------------------------------------------------------------------------------------------------------------
 
-	private ReactiveDictionary<long, ConnectedPeer> _connectedPeers = new();
 	public ReactiveState<ConnectionStateEnum> ConnectionState = new(ConnectionStateEnum.Offline);
-
-	// Fields for Bi-Directional RPC control
-	private Dictionary<int, TaskCompletionSource<Variant>> DataRequests = new();
-	private int lastDataRequestId = 0;
+	private ReactiveDictionary<long, ConnectedPeer> _connectedPeers = new();
+	private ReactiveDictionary<Guid, NetworkSpawnableNode> _networkSpawnedNodesById = new();
 
 	// -----------------------------------------------------------------------------------------------------------------
 	// PROPERTIES
 	// -----------------------------------------------------------------------------------------------------------------
 
+	public IReadOnlyDictionary<Guid, NetworkSpawnableNode> NetworkNodesById => this._networkSpawnedNodesById;
 	public IReadOnlyDictionary<long, ConnectedPeer> ConnectedPeers => this._connectedPeers;
 	public IEnumerable<ConnectedPeer> PeersInScene
 	{
 		get {
-			NodePath currentScene = this.GetTree().CurrentScene.GetPath();
+			NodePath currentScene = this.LocalCurrentScene;
 			return this._connectedPeers.Values.Where(peer => currentScene == peer.CurrentScene.Value);
 		}
 	}
+	private NodePath LocalCurrentScene => this.GetTree().CurrentScene.GetPath();
 
 	// -----------------------------------------------------------------------------------------------------------------
 	// SIGNALS
@@ -82,12 +76,10 @@ public partial class SynchronizedStateServer : Node
 	// EVENTS
 	// -----------------------------------------------------------------------------------------------------------------
 
-	public override void _EnterTree()
-	{
-		base._EnterTree();
-		this.SetupSingletonInstance();
-		this.SetupSceneChangeObservation();
-	}
+	// public override void _EnterTree()
+	// {
+	// 	base._EnterTree();
+	// }
 
 	// public override void _ExitTree()
 	// {
@@ -112,26 +104,11 @@ public partial class SynchronizedStateServer : Node
 	// public override string[] _GetConfigurationWarnings()
 	// 	=> base._PhysicsProcess(delta);
 
-	// -----------------------------------------------------------------------------------------------------------------
-	// SETUP METHODS
-	// -----------------------------------------------------------------------------------------------------------------
+    // -----------------------------------------------------------------------------------------------------------------
+    // METHODS
+    // -----------------------------------------------------------------------------------------------------------------
 
-	private void SetupSingletonInstance()
-	{
-		if (SynchronizedStateServer.Instance != null) {
-			GD.PushError($"Failed to set {nameof(SynchronizedStateServer)}.{nameof(SynchronizedStateServer.Instance)} because it is already set.");
-			this.QueueFree();
-			return;
-		}
-		SynchronizedStateServer.Instance = this;
-		this.TreeExiting += () => {
-			if (SynchronizedStateServer.Instance == this) {
-				SynchronizedStateServer.Instance = null!;
-			}
-		};
-	}
-
-	private void SetupSceneChangeObservation()
+	private void SetupConnections()
 	{
 		ulong? lastSceneId = this.GetTree().CurrentScene.GetInstanceId();
 		this.GetTree().TreeChanged += () => {
@@ -149,13 +126,9 @@ public partial class SynchronizedStateServer : Node
 		};
 	}
 
-    // -----------------------------------------------------------------------------------------------------------------
-    // CONNECTION METHODS
-    // -----------------------------------------------------------------------------------------------------------------
-
     public void OpenMultiplayerServer(int port = DEFAULT_PORT)
 	{
-		GD.PrintS(SynchronizedStateServer.NetId, nameof(SynchronizedStateServer), "Server started.");
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Server started.");
 		WebSocketMultiplayerPeer serverPeer = new WebSocketMultiplayerPeer();
 		serverPeer.CreateServer(port, SERVER_BIND_ADDRESS);
 		this.Multiplayer.MultiplayerPeer = serverPeer;
@@ -167,7 +140,7 @@ public partial class SynchronizedStateServer : Node
 
 	public async Task ConnectToServer(string connectAddress)
 	{
-		GD.PrintS(SynchronizedStateServer.NetId, nameof(SynchronizedStateServer), "Connecting to server...", new { connectAddress });
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Connecting to server...", new { connectAddress });
 		WebSocketMultiplayerPeer clientPeer = new WebSocketMultiplayerPeer();
 		clientPeer.CreateClient(connectAddress);
 		this.Multiplayer.MultiplayerPeer = clientPeer;
@@ -179,9 +152,9 @@ public partial class SynchronizedStateServer : Node
 		this.ConnectionState.Value = ConnectionStateEnum.ClientConnecting;
 		try {
 			await source.Task;
-			GD.PrintS(SynchronizedStateServer.NetId, nameof(SynchronizedStateServer), "Connected successfully.");
+			GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Connected successfully.");
 		} catch {
-			GD.PrintErr(nameof(SynchronizedStateServer), "Failed to connect to server.");
+			GD.PrintErr(nameof(NetworkManager), "Failed to connect to server.");
 			this.DisconnectFromServer();
 			throw;
 		} finally {
@@ -196,14 +169,14 @@ public partial class SynchronizedStateServer : Node
 
     private void OnPeerConnected(long peerId)
 	{
-		GD.PrintS(SynchronizedStateServer.NetId, nameof(SynchronizedStateServer), "Peer connected.", peerId);
-		this._connectedPeers[peerId] = new() { Id = peerId };
-		this.EmitSignal(SignalName.PeerConnected, peerId);
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Peer connected.", peerId);
+        ConnectedPeer peer = this._connectedPeers[peerId] = new() { Id = peerId };
+		this.EmitSignal(SignalName.PeerConnected, peer);
 	}
 
 	private void OnPeerDisconnected(long id)
 	{
-		GD.PrintS(SynchronizedStateServer.NetId, nameof(SynchronizedStateServer), "Peer disconnected.", id);
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Peer disconnected.", id);
 		this._connectedPeers.Remove(id);
 		this.EmitSignal(SignalName.PeerDisconnected, id);
 	}
@@ -213,7 +186,7 @@ public partial class SynchronizedStateServer : Node
 		if (this.ConnectionState.Value == ConnectionStateEnum.Offline) {
 			return;
 		}
-		GD.PrintS(SynchronizedStateServer.NetId, nameof(SynchronizedStateServer), "Server closed.");
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Server closed.");
 		this.EndConnection();
 		this.EmitSignal(SignalName.ServerClosed);
 	}
@@ -223,7 +196,7 @@ public partial class SynchronizedStateServer : Node
 		if (this.ConnectionState.Value == ConnectionStateEnum.Offline) {
 			return;
 		}
-		GD.PrintS(SynchronizedStateServer.NetId, nameof(SynchronizedStateServer), "Disconnected from server.");
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Disconnected from server.");
 		this.EndConnection();
 		this.Multiplayer.ServerDisconnected -= DisconnectFromServer;
 		this.EmitSignal(SignalName.DisconnectedFromServer);
@@ -241,7 +214,7 @@ public partial class SynchronizedStateServer : Node
     private void BroadcastCurrentScene()
     {
 		NodePath? currentScene = this.GetTree().CurrentScene?.GetPath();
-		GD.PrintS(SynchronizedStateServer.NetId, nameof(SynchronizedStateServer), "Broadcasting scene change... To Scene:", currentScene);
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Broadcasting scene change... To Scene:", currentScene);
 		this.Rpc(MethodName.RpcNotifyPeerSceneChanged, currentScene ?? new Variant());
     }
 
@@ -250,7 +223,7 @@ public partial class SynchronizedStateServer : Node
 	{
 		if (!this._connectedPeers.TryGetValue(this.Multiplayer.GetRemoteSenderId(), out ConnectedPeer? peer)) {
 			GD.PushError(
-				nameof(SynchronizedStateServer),
+				nameof(NetworkManager),
 				"Received peer scene change notification from an invalid peer.",
 				new {
 					RemoveSenderId = this.Multiplayer.GetRemoteSenderId(),
@@ -259,84 +232,82 @@ public partial class SynchronizedStateServer : Node
 			);
 			return;
 		}
-		GD.PrintS(SynchronizedStateServer.NetId, nameof(SynchronizedStateServer), "Remote peer changed scene.", "Peer Id:", peer.Id, "To Scene:", scenePath);
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Remote peer changed scene.", "Peer Id:", peer.Id, "To Scene:", scenePath);
 		peer.CurrentScene.Value = scenePath;
 		this.EmitSignal(SignalName.PeerSceneChanged, peer);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------
-	// BI-DIRECTIONAL RPC METHODS
+	// OBJECT SPAWNING & SYNCHRONIZATION METHODS
 	// -----------------------------------------------------------------------------------------------------------------
 
-	public async Task<Variant> SendRpcRequest(long peerId, Node node, StringName method, params Variant[] args)
-		=> await this.SendRpcRequest(peerId, node.GetPath(), method, args);
+	public void Spawn(PackedScene scene, NodePath parentPath, string? name = null, params Variant[] args)
+		=> this.Spawn(scene, this.GetNode(parentPath), name, args);
 
-	public Task<Variant> SendRpcRequest(long peerId, NodePath path, StringName method, params Variant[] args)
+	public async void Spawn(PackedScene scene, Node parent, string? name = null, params Variant[] args)
 	{
-		int id = ++lastDataRequestId;
-		TaskCompletionSource<Variant> source = new();
-		CancellationTokenSource cancel = new(5000);
-		this.DataRequests[id] = source;
-		this.RpcId(peerId, MethodName.RpcHandleRequest, id, path, method, new Godot.Collections.Array(args));
-		try {
-			return source.Task.WaitAsync(cancel.Token);
-		} finally {
-			cancel.Dispose();
-			this.DataRequests.Remove(id);
+		if (!parent.IsMultiplayerAuthority()) {
+			throw new Exception($"{nameof(NetworkManager)} failed to spawn {scene} at node {parent.GetPath()}. Local peer is not the multiplayer authority of this node.");
 		}
+		Guid netId = Guid.NewGuid();
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Spawning new network node...", new { netId, Parent = parent.GetPath() });
+		// TODO Waiting for all peers to respond seems a bad idea...
+		await this.BiDiRpc(
+			this,
+			MethodName.RpcSpawn,
+			scene,
+			parent.GetPath(),
+			netId.ToByteArray(),
+			name ?? new Variant(),
+			new Godot.Collections.Array(args)
+		);
+		this.Rpc(MethodName.RpcNotifyNetworkReady, netId.ToByteArray(), new Godot.Collections.Array(args));
 	}
 
-	[Rpc(MultiplayerApi.RpcMode.AnyPeer)]
-	private void RpcHandleRequest(int id, NodePath path, StringName method, Godot.Collections.Array args)
+	[Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = true)]
+	private void RpcSpawn(PackedScene scene, NodePath parentPath, Variant netId, Variant name)
 	{
-		try {
-			Variant result = this.GetNode(path).Call(method, args);
-			this.RpcId(this.Multiplayer.GetRemoteSenderId(), MethodName.RpcHandleRequestResult, id, result);
-		} catch (Exception e) {
-			this.RpcId(this.Multiplayer.GetRemoteSenderId(), MethodName.RpcHandleRequestFailure, id, e.ToString());
-		}
-	}
-
-	[Rpc(MultiplayerApi.RpcMode.AnyPeer)]
-	private void RpcHandleRequestResult(int id, Variant result)
-	{
-		if (this.DataRequests.TryGetValue(id, out TaskCompletionSource<Variant>? source)) {
-			source.SetResult(result);
-			this.DataRequests.Remove(id);
-		}
-	}
-
-	[Rpc(MultiplayerApi.RpcMode.AnyPeer)]
-	private void RpcHandleRequestFailure(int id, string message)
-	{
-		if (this.DataRequests.TryGetValue(id, out TaskCompletionSource<Variant>? source)) {
-			source.SetException(new Exception(message));
-			this.DataRequests.Remove(id);
-		}
-	}
-
-	// -----------------------------------------------------------------------------------------------------------------
-	// SYNCHRONIZED NODE HELPER METHODS
-	// -----------------------------------------------------------------------------------------------------------------
-
-	public void BroadcastState(SynchronizedNode node)
-		=> this.Rpc(MethodName.RpcPutState, node.GetPath(), node.Value, this.GetTree().CurrentScene.Name);
-
-	[Rpc(MultiplayerApi.RpcMode.Authority)]
-	private void RpcPutState(NodePath path, Variant value, string currentScene)
-	{
-		if (currentScene != this.GetTree().CurrentScene.Name) {
-			GD.PushWarning($"[{nameof(SynchronizedStateServer)}] Received synchronized state for scene {currentScene} but current scene is {this.GetTree().CurrentScene.Name}. Ignoring...");
+		if (
+			!this.ConnectedPeers.TryGetValue(this.Multiplayer.GetRemoteSenderId(), out ConnectedPeer? peer)
+			|| peer.CurrentScene.Value != this.LocalCurrentScene
+		) {
+			GD.PrintS($"[{nameof(NetworkManager)}] Received spawn request from a peer in a different scene.", new { scene.ResourceName, parentPath, this.LocalCurrentScene });
 			return;
 		}
-		if (this.GetNodeOrNull(path) is SynchronizedState state) {
-			state.Value = value;
-		} else if (this.GetNodeOrNull(path.GetParentPath()) is Node parent) {
-			SynchronizedNode node = SynchronizedNode.From(value);
-			node.Name = path.GetName(path.GetNameCount() - 1);
-			parent.AddChild(node);
-		} else {
-			GD.PushError($"[{nameof(SynchronizedStateServer)}] Failed to create received synchronized state at path {path}. Value: {value}");
+		if (this.GetNodeOrNull(parentPath) is not Node parent) {
+			throw new Exception($"{nameof(NetworkManager)} failed to spawn {scene} at {parentPath}. Container node (parent) not found.");
 		}
+		if (parent.GetMultiplayerAuthority() != this.Multiplayer.GetRemoteSenderId()) {
+			throw new Exception($"{nameof(NetworkManager)} failed to spawn {scene} at {parentPath}. Only multiplayer authority can spawn nodes.");
+		}
+        Node instance = scene.Instantiate();
+		if (instance is not NetworkSpawnableNode netNode) {
+			instance.Free();
+			throw new Exception($"{nameof(NetworkManager)} failed to spawn {scene} at {parentPath}. The instance is not a {nameof(NetworkSpawnableNode)}.");
+		}
+		netNode.NetIdVariant = netId;
+		netNode.Name = name.VariantType == Variant.Type.String
+			? name.AsString()
+			: netNode.NetId.ToString();
+		this._networkSpawnedNodesById[netNode.NetId] = netNode;
+		parent.AddChild(netNode);
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Spawned new network node.", new { netNode.NetId, Path = netNode.GetPath() });
+	}
+
+	[Rpc(MultiplayerApi.RpcMode.AnyPeer)]
+	private void RpcNotifyNetworkReady(Variant netIdVariant, Godot.Collections.Array args)
+	{
+		Guid netId = new Guid(netIdVariant.AsByteArray());
+		if (!this.NetworkNodesById.TryGetValue(netId, out NetworkSpawnableNode? netNode)) {
+			GD.PushError(
+				NetworkManager.NetId,
+				nameof(NetworkManager),
+				"Received NetworkReady notification but could not found network node for the given NetId.",
+				new { netId }
+			);
+			return;
+		}
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Received NetworkReady notification for a network node.", new { netNode.NetId, Path = netNode.GetPath() });
+		netNode.NotifyNetworkReady([..args]);
 	}
 }
