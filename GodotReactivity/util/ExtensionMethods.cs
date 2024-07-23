@@ -1,10 +1,35 @@
 using System;
+using System.Collections.Generic;
 using Godot;
 
 namespace Raele.GodotReactivity.ExtensionMethods;
 
 public static class ExtensionMethods
 {
+	public static void ForEach<T>(this IEnumerable<T> source, Action<T> action)
+	{
+		foreach (T item in source) {
+			action(item);
+		}
+	}
+
+	public static void ForEach<T>(this IEnumerable<T> source, Action<T, int> action)
+	{
+		int i = 0;
+		foreach (T item in source) {
+			action(item, i++);
+		}
+	}
+
+	public static IEnumerable<T> WhereNotNull<T>(this IEnumerable<T?> source)
+	{
+		foreach (T? item in source) {
+			if (item != null) {
+				yield return item;
+			}
+		}
+	}
+
 	public static NodePath GetParentPath(this NodePath path)
 	{
 		if (path.GetNameCount() == 0) {
@@ -25,4 +50,15 @@ public static class ExtensionMethods
 
 	public static string GetNodeName(this NodePath path)
 		=> path.GetName(path.GetNameCount() - 1);
+
+	public static IEnumerable<R> SelectWhereValid<T, R>(this IEnumerable<T> source, Func<T, R> predicate, Func<R, bool>? validator = null)
+	{
+		validator ??= r => r != null;
+		foreach (T item in source) {
+			R result = predicate(item);
+			if (validator(result)) {
+				yield return result;
+			}
+		}
+	}
 }

@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using Godot;
 using Raele.PocketWars;
+using Raele.PocketWars.ExtensionMethods;
 
 namespace Raele.GodotReactivity;
 

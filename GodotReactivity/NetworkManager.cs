@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using Godot;
 using Raele.GodotReactivity.ExtensionMethods;
 
@@ -12,7 +11,12 @@ public partial class NetworkManager : Node
 	// -----------------------------------------------------------------------------------------------------------------
 
 	public static NetworkManager Instance { get; private set; } = null!;
-	public static string NetId = string.Join("", Guid.NewGuid().ToString().TakeLast(13));
+	// public static string NetId = string.Join("", Guid.NewGuid().ToString().TakeLast(12));
+	public static string NetId => NetworkManager.Instance.Multiplayer?.HasMultiplayerPeer() == true
+		? NetworkManager.Instance.Multiplayer.GetUniqueId() == 1
+			? "🌐#1"
+			: $"💻#{NetworkManager.Instance.Multiplayer.GetUniqueId()}"
+		: string.Empty;
 
 	// -----------------------------------------------------------------------------------------------------------------
 	// EXPORTS
@@ -63,10 +67,11 @@ public partial class NetworkManager : Node
 	// 	base._Ready();
 	// }
 
-	// public override void _Process(double delta)
-	// {
-	// 	base._Process(delta);
-	// }
+	public override void _Process(double delta)
+	{
+		base._Process(delta);
+		this.Multiplayer.Poll();
+	}
 
 	// public override void _PhysicsProcess(double delta)
 	// {
