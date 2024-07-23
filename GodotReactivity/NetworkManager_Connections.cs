@@ -244,6 +244,7 @@ public partial class NetworkManager : Node
 		}
 		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Connected peer changed scene.", "Peer Id:", peer.Id, "To Scene:", scenePath ?? "null", "From Scene:", peer.CurrentScene.Value ?? "null");
 		peer.CurrentScene.Value = scenePath;
+		this.OnPeerSceneChanged(peer);
 		this.EmitSignal(SignalName.PeerSceneChanged, peer);
 	}
 }

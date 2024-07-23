@@ -61,4 +61,13 @@ public static class ExtensionMethods
 			}
 		}
 	}
+
+	public static IEnumerable<Node> GetAncestors(this Node node)
+	{
+		Node? current = node.GetParent();
+		while (current != null) {
+			yield return current;
+			current = current.GetParent();
+		}
+	}
 }

@@ -75,7 +75,7 @@ public partial class NetworkSynchronizer : Node
 			})
 			.WhereNotNull()
 			.ForEach(this.RegisterVariable);
-		this.Name = nameof(NetworkSynchronizer);
+		NetworkManager.Instance.RegisterSynchronizer(this);
 		NetworkManager.Instance.PeerSceneChanged += OnPeerSceneChanged;
 	}
 
