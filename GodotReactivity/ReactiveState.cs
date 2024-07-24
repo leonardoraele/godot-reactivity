@@ -26,4 +26,6 @@ public class ReactiveState<T> : Observable<T>
 		this._state = initialValue;
 		this._equalityComparer = equalityComparer ?? EqualityComparer<T>.Default;
 	}
+
+	public override string ToString() => $"{this.Value}";
 }

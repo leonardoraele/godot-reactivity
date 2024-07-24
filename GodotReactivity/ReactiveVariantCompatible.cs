@@ -25,7 +25,7 @@ public class ReactiveVariantCompatible<T> : ReactiveVariant where T : IVariantCo
 			if (value == null ? this._value == null : value.Equals(this._value)) {
 				return;
 			}
-			this._value = value;
+			this._value = value!;
 			this.NotifyChanged();
 		}
 	}

@@ -127,7 +127,7 @@ public partial class NetworkManager : Node
 				return;
 			}
 			if (this.LocalPeer?.IsInSameScene(peer) != true) {
-				GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Ignoring spawn node rpc call. Cause: Different scene.", new { uid, RpcSenderId = this.Multiplayer.GetRemoteSenderId(), RpcSenderScene = peer?.CurrentScene.Value, LocalPeerScene = this.LocalPeer?.CurrentScene.Value });
+				GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Ignoring spawn node rpc call. Cause: Different scene.", new { /*uid,*/ RpcSenderId = this.Multiplayer.GetRemoteSenderId()/*, RpcSenderScene = peer?.CurrentScene.Value, LocalPeerScene = this.LocalPeer?.CurrentScene.Value*/ });
 				return;
 			}
 		}
@@ -142,7 +142,6 @@ public partial class NetworkManager : Node
         Node instance = scene.Instantiate();
 		instance.Name = new Guid(netIdBytes.AsByteArray()).ToString();
 		instance.AddToGroup(NetworkManager.SPAWNED_GROUP);
-		instance.TreeExiting += () => this.Despawn(instance);
 		this.RegisterSpawnedNode(instance, uid, args);
 		parent.AddChild(instance);
 		if (instance.HasMethod("_NetworkSpawned")) { // TODO Use StringName instead
@@ -152,7 +151,7 @@ public partial class NetworkManager : Node
 			this.SpawnedNodes[instance.Name].Synchronizer?.Update();
 			this.RpcId(instance.GetMultiplayerAuthority(), MethodName.RpcSpawnDescendants, netIdBytes);
 		}
-		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Spawned new network node.", new { uid, Path = instance.GetPath() });
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Network-spawned scene", uid, "as", instance.Name);
 	}
 
 	private void RegisterSpawnedNode(Node node, string sceneUid, Godot.Collections.Array args)
@@ -237,8 +236,8 @@ public partial class NetworkManager : Node
 		}
 	}
 
-	private void Despawn(NodePath nodePath) => this.Despawn(this.GetNode(nodePath));
-	private void Despawn(Node node)
+	public void Despawn(NodePath nodePath) => this.Despawn(this.GetNode(nodePath));
+	public void Despawn(Node node)
 	{
 		if (!node.IsMultiplayerAuthority()) {
 			GD.PushError(NetworkManager.NetId, nameof(NetworkManager), "Failed to despawn network node. Cause: Local peer is not the multiplayer authority of the node.", new { NodePath = node.GetPath(), AuthorityId = node.GetMultiplayerAuthority(), LocalPeerId = this.Multiplayer.GetUniqueId() });

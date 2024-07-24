@@ -19,7 +19,7 @@ public class EffectContext : Observable
 
 	public static bool TryGetContext([NotNullWhen(true)] out EffectContext? context)
 	{
-		context = GetContext();
+		context = EffectContext.GetContext();
 		return context != null;
 	}
 
@@ -49,12 +49,12 @@ public class EffectContext : Observable
 		stack.Push(this);
 		try {
 			action();
-		} finally {
-			ContextByThread.Remove(Thread.CurrentThread);
-		}
-		stack.Pop();
-		if (stack.Count == 0) {
-			ContextByThread.Remove(Thread.CurrentThread);
+		} catch {
+			stack.Pop();
+			if (stack.Count == 0) {
+				ContextByThread.Remove(Thread.CurrentThread);
+			}
+			throw;
 		}
 	}
 

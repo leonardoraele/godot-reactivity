@@ -42,7 +42,7 @@ public class ReactiveVariantCompatibleArray<T>
 			if (value == null ? this._value[index] == null : value.Equals(this._value[index])) {
 				return;
 			}
-			this._value[index] = value;
+			this._value[index] = value!;
 			this.NotifyChanged();
 		}
 	}

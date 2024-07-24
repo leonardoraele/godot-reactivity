@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reactive.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Godot;
 
@@ -116,7 +118,7 @@ public partial class NetworkManager : Node
 		ulong? lastSceneId = this.GetTree().CurrentScene.GetInstanceId();
 		this.GetTree().TreeChanged += () => {
 			ulong? currentSceneId = this.GetTree().CurrentScene?.GetInstanceId();
-			if (currentSceneId != lastSceneId) {
+			if (currentSceneId.HasValue && currentSceneId != lastSceneId) {
 				lastSceneId = currentSceneId;
 				if (
 					this.ConnectionState.Value == ConnectionStateEnum.Host
@@ -130,6 +132,7 @@ public partial class NetworkManager : Node
 
     public void OpenMultiplayerServer(int port = DEFAULT_PORT)
 	{
+		this.Disconnect();
 		WebSocketMultiplayerPeer wsServerPeer = new WebSocketMultiplayerPeer();
 		wsServerPeer.CreateServer(port, SERVER_BIND_ADDRESS);
 		this.Multiplayer.MultiplayerPeer = wsServerPeer;
@@ -143,6 +146,7 @@ public partial class NetworkManager : Node
 
 	public async Task ConnectToServer(string connectAddress)
 	{
+		this.Disconnect();
 		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Connecting to server...", new { connectAddress });
 		WebSocketMultiplayerPeer clientPeer = new WebSocketMultiplayerPeer();
 		clientPeer.CreateClient(connectAddress);
@@ -182,7 +186,7 @@ public partial class NetworkManager : Node
 
     private void OnPeerConnected(long peerId)
 	{
-		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Peer connected.", peerId);
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), $"Peer #{peerId} connected.");
 		ConnectedPeer peer = this._connectedPeers[peerId] = new() { Id = peerId };
 		if (this.GetTree().CurrentScene?.GetPath() is NodePath currentScene) {
 			this.RpcId(peerId, MethodName.RpcNotifyPeerSceneChanged, currentScene);
@@ -192,43 +196,56 @@ public partial class NetworkManager : Node
 
 	private void OnPeerDisconnected(long id)
 	{
-		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Peer disconnected.", id);
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), $"Peer #{id} disconnected.");
 		this._connectedPeers.Remove(id);
 		this.EmitSignal(SignalName.PeerDisconnected, id);
 	}
 
-	public void CloseMultiplayerServer()
+	public void Disconnect()
 	{
-		if (this.ConnectionState.Value == ConnectionStateEnum.Offline) {
-			return;
+		switch (this.ConnectionState.Value) {
+			case ConnectionStateEnum.Host:
+				this.CloseMultiplayerServer();
+				break;
+			case ConnectionStateEnum.ClientConnected:
+			case ConnectionStateEnum.ClientConnecting:
+				this.DisconnectFromServer();
+				break;
+			default:
+				this._BaseDisconnect();
+				break;
 		}
+	}
+
+	private void CloseMultiplayerServer()
+	{
 		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Server closed.");
-		this.EndConnection();
+		this._BaseDisconnect();
+		this.Multiplayer.PeerConnected -= this.OnPeerConnected;
+		this.Multiplayer.PeerDisconnected -= this.OnPeerDisconnected;
 		this.EmitSignal(SignalName.ServerClosed);
 	}
 
-	public void DisconnectFromServer()
+	private void DisconnectFromServer()
 	{
-		if (this.ConnectionState.Value == ConnectionStateEnum.Offline) {
-			return;
-		}
 		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Disconnected from server.");
-		this.EndConnection();
+		this._BaseDisconnect();
+		this.Multiplayer.PeerConnected -= this.OnPeerConnected;
+		this.Multiplayer.PeerDisconnected -= this.OnPeerDisconnected;
 		this.Multiplayer.ServerDisconnected -= this.DisconnectFromServer;
 		this.EmitSignal(SignalName.DisconnectedFromServer);
 	}
 
-	private void EndConnection()
+	private void _BaseDisconnect()
 	{
 		this._connectedPeers.Clear();
+		this.Multiplayer.MultiplayerPeer?.Close();
 		this.Multiplayer.MultiplayerPeer = null;
 		this.ConnectionState.Value = ConnectionStateEnum.Offline;
-		this.Multiplayer.PeerConnected -= this.OnPeerConnected;
-		this.Multiplayer.PeerDisconnected -= this.OnPeerDisconnected;
 	}
 
 	[Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = true)]
-	private void RpcNotifyPeerSceneChanged(NodePath? scenePath)
+	private void RpcNotifyPeerSceneChanged(NodePath scenePath)
 	{
 		if (!this._connectedPeers.TryGetValue(this.Multiplayer.GetRemoteSenderId(), out ConnectedPeer? peer)) {
 			GD.PushError(
@@ -242,8 +259,10 @@ public partial class NetworkManager : Node
 			);
 			return;
 		}
-		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Connected peer changed scene.", "Peer Id:", peer.Id, "To Scene:", scenePath ?? "null", "From Scene:", peer.CurrentScene.Value ?? "null");
-		peer.CurrentScene.Value = scenePath;
+		string toScene = scenePath.IsEmpty ? "<null>" : scenePath;
+		string fromScene = peer.CurrentScene.Value?.IsEmpty != false ? "<null>" : peer.CurrentScene.Value;
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), $"Peer #{peer.Id} changed scenes.", fromScene, "->", toScene);
+		peer.CurrentScene.Value = scenePath.IsEmpty ? null : scenePath;
 		this.OnPeerSceneChanged(peer);
 		this.EmitSignal(SignalName.PeerSceneChanged, peer);
 	}

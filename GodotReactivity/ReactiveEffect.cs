@@ -50,7 +50,7 @@ public class ReactiveEffect : IDisposable
 
     private void Run()
 	{
-		if (this._context?.Dirty == false) {
+		if (this._context?.Dirty == false || !this.Enabled) {
 			return;
 		}
 		this._context?.Dispose();
@@ -67,6 +67,7 @@ public class ReactiveEffect : IDisposable
 	{
 		this._context?.Dispose();
 		this._context = null;
+		this.Enabled = false;
 	}
 
 	public IDisposable DisabledContext()

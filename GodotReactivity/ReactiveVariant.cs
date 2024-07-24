@@ -8,4 +8,6 @@ public abstract class ReactiveVariant : Observable
 
 	public static implicit operator Variant(ReactiveVariant reactiveVariant)
 		=> reactiveVariant.VariantValue;
+
+    public override string ToString() => this.VariantValue.ToString();
 }

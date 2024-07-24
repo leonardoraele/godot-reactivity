@@ -70,4 +70,13 @@ public static class ExtensionMethods
 			current = current.GetParent();
 		}
 	}
+
+	public static void RemoveAndDeleteAllChildren(this Node node)
+	{
+		while (node.GetChildCount() > 0) {
+			Node child = node.GetChild(node.GetChildCount() - 1);
+			node.RemoveChild(child);
+			child.QueueFree();
+		}
+	}
 }

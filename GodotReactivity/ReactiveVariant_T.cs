@@ -14,6 +14,7 @@ public class ReactiveVariant<[MustBeVariant] T> : ReactiveVariant
 	}
 
 	public static implicit operator T(ReactiveVariant<T> reactiveVariant) => reactiveVariant.Value;
+	public static implicit operator Variant(ReactiveVariant<T> reactiveVariant) => Variant.From(reactiveVariant.Value);
 
     public T Value {
 		get {
