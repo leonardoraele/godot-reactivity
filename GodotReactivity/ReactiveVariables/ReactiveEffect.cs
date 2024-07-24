@@ -30,6 +30,13 @@ public class ReactiveEffect : IDisposable
 		return effect;
 	}
 
+    public static ReactiveEffect CreateWithToken(CancellationToken token, Action action)
+    {
+		ReactiveEffect effect = new(action);
+        token.Register(effect.Dispose);
+		return effect;
+    }
+
 	public void ForceRerun(bool deferred = true)
 	{
 		this._context?.Dispose();
@@ -76,7 +83,7 @@ public class ReactiveEffect : IDisposable
 		return new EffectDisableContext(() => this.Enabled = true);
 	}
 
-	public class EffectDisableContext : IDisposable
+    public class EffectDisableContext : IDisposable
 	{
         private Action OnDisposed;
 		public EffectDisableContext(Action onDisposed) => this.OnDisposed = onDisposed;
