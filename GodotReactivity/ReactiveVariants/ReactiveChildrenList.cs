@@ -1,4 +1,3 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
 using Godot;
@@ -6,7 +5,7 @@ using Raele.GodotReactivity.ExtensionMethods;
 
 namespace Raele.GodotReactivity;
 
-public class ReactiveParent
+public class ReactiveChildrenList
 	: Observable<Godot.Collections.Array<Node>>,
 	ICollection<Node>,
 	IReadOnlyCollection<Node>,
@@ -15,14 +14,14 @@ public class ReactiveParent
 {
 	public Node _parent;
 
-	public ReactiveParent(Node parent) {
+	public ReactiveChildrenList(Node parent) {
 		this._parent = parent;
 		this._parent.ChildEnteredTree += this._NotifyChanged;
 		this._parent.ChildExitingTree += this._NotifyChanged;
 		this._parent.ChildOrderChanged += this.NotifyChanged;
 	}
 
-	~ReactiveParent()
+	~ReactiveChildrenList()
 	{
 		this._parent.ChildEnteredTree -= this._NotifyChanged;
 		this._parent.ChildExitingTree -= this._NotifyChanged;

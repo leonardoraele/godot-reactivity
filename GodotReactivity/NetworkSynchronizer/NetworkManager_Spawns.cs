@@ -97,6 +97,9 @@ public partial class NetworkManager : Node
 	// METHODS
 	// -----------------------------------------------------------------------------------------------------------------
 
+	private void SetupSpawns()
+		=> NetworkManager.Scenes.PeerChangedScene += this.OnPeerChangedScene;
+
 	public void Spawn(PackedScene scene, NodePath parentPath, params Variant[] args)
 		=> this.Spawn(scene, this.GetNode(parentPath), args);
 
@@ -145,10 +148,12 @@ public partial class NetworkManager : Node
 		this.RegisterSpawnedNode(instance, uid, args);
 		parent.AddChild(instance);
 		if (instance.HasMethod("_NetworkSpawned")) { // TODO Use StringName instead
-			instance.Call("_NetworkSpawned", [..args]);
+			using (this.SpawnedNodes[instance.Name].Synchronizer?.OfflineMode()) {
+				instance.Call("_NetworkSpawned", [..args]);
+			}
 		}
 		if (!instance.IsMultiplayerAuthority()) {
-			this.SpawnedNodes[instance.Name].Synchronizer?.Update();
+			// this.SpawnedNodes[instance.Name].Synchronizer?.Update();
 			this.RpcId(instance.GetMultiplayerAuthority(), MethodName.RpcSpawnDescendants, netIdBytes);
 		}
 		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Network-spawned scene", uid, "as", instance.Name);
@@ -215,7 +220,7 @@ public partial class NetworkManager : Node
 			));
 	}
 
-	private void OnPeerSceneChanged(ConnectedPeer peer)
+	private void OnPeerChangedScene(ConnectedPeer peer)
 	{
 		if (peer == this.LocalPeer) {
 			this.SpawnedNodes.Clear();
@@ -225,14 +230,15 @@ public partial class NetworkManager : Node
 				.Where(record => record.AncestorSpawnNetId == null);
 			GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), $"Detected new peer in current scene. Spawning {spawnRecords.Count()} nodes...", new { PeerId = peer.Id });
 			spawnRecords.ForEach(record =>
-			this.RpcId(
-				peer.Id,
-				MethodName.RpcSpawn,
-				record.SceneUid,
-				record.Node.GetParent().GetPath(),
-				record.NetIdBytes,
-				record.Args
-			));
+				this.RpcId(
+					peer.Id,
+					MethodName.RpcSpawn,
+					record.SceneUid,
+					record.Node.GetParent().GetPath(),
+					record.NetIdBytes,
+					record.Args
+				)
+			);
 		}
 	}
 
@@ -262,4 +268,7 @@ public partial class NetworkManager : Node
 		this.UnregisterSpawnedNode(record);
 		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Despawned a network node.", new { Path = record.Node.GetPath() });
 	}
+
+	public bool IsNetworkSpawned(Node node)
+		=> node.IsInGroup(SPAWNED_GROUP);
 }

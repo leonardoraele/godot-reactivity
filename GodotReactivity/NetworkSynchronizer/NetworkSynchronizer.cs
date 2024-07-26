@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Reactive.Disposables;
 using System.Reflection;
 using System.Threading.Tasks;
 using Godot;
@@ -8,13 +10,18 @@ using Raele.GodotReactivity.ExtensionMethods;
 
 namespace Raele.GodotReactivity;
 
-// This should be a node you attach to a node that you want to synchronize over the network.
-// This node looks for fields with the [Synchronized] attribute in it's parent node and synchronizes them using the
-// same logic as MultiplayerSynchronized and NetworkSpawnableNode.
-// The parent of this node must implement a IMultiplayerSynchronized interface that provides a MultiplayerSynchronized
-// instance as a property so that it's easy to perform network operations on the node. (e.g. `Despawn()`) The
-// MultiplayerSynchronized node could regiter itself as the MultiplayerSynchronized instance of it's parent in its
-// _EnterTree hook so that it's available at _Ready time.
+/// <summary>
+/// The NetworkSynchronizer node synchronizes the values of its parent's fields between network peers. To synchronize a
+/// field, mark it with the [Synchronized] attribute. Whenever the field changes value, it is automatically synchronized
+/// with all peers in the same scene. Synchronization only works if the authority for the node is in the scene, and for
+/// as long as they remain in the scene. Only fields of type ReactiveVariant and its derived types can be synchronized.
+/// (i.e. ReactiveVariant<T>, ReactiveVariantList, ReactiveChildrenList, ReactiveVariantCompatible<T>, etc.)
+///
+/// For nodes that are part of the main scene, you only need to attach this node as a child of the node with the
+/// [Synchroniozed] fields and synchronization will work, no additional steps needed. For nodes that are instantiated at
+/// runtime, you need to call the NetworkManager.Spawner.Spawn() method to instantiate the node to all peers together,
+/// otherwise synchronization won't work.
+/// </summary>
 public partial class NetworkSynchronizer : Node
 {
 	// -----------------------------------------------------------------------------------------------------------------
@@ -35,7 +42,7 @@ public partial class NetworkSynchronizer : Node
 
 	private List<ReactiveVariant> SynchronizedVariables = new();
 	private uint DirtyFlag = 0;
-	private bool IsUpdatingStates = false;
+	private bool IsOffline = false;
 	private Node ParentCache = null!;
 
 	// -----------------------------------------------------------------------------------------------------------------
@@ -74,14 +81,14 @@ public partial class NetworkSynchronizer : Node
 			})
 			.WhereNotNull()
 			.ForEach(this.RegisterVariable);
-		NetworkManager.Instance.RegisterSynchronizer(this);
-		NetworkManager.Instance.PeerSceneChanged += OnPeerSceneChanged;
+		NetworkManager.Spawner.RegisterSynchronizer(this);
+		NetworkManager.Scenes.PeerChangedScene += OnPeerChangedScene;
 	}
 
 	public override void _ExitTree()
 	{
 		base._ExitTree();
-		NetworkManager.Instance.PeerSceneChanged -= OnPeerSceneChanged;
+		NetworkManager.Scenes.PeerChangedScene -= OnPeerChangedScene;
 	}
 
 	// public override void _Ready()
@@ -111,14 +118,14 @@ public partial class NetworkSynchronizer : Node
 	{
 		int stateIndex = this.SynchronizedVariables.Count;
 		state.Changed += () => {
-			if (!this.IsUpdatingStates) {
+			if (!this.IsOffline) {
 				this.MarkStateDirty(stateIndex);
 			}
 		};
 		this.SynchronizedVariables.Add(state);
 	}
 
-	private void OnPeerSceneChanged(ConnectedPeer peer)
+	private void OnPeerChangedScene(ConnectedPeer peer)
 	{
 		if (
 			!peer.IsLocalPeer
@@ -132,25 +139,22 @@ public partial class NetworkSynchronizer : Node
 		}
 	}
 
+	public void ForceBroadcastSynchronizedFields() => this.MarkAllStatesDirty();
+	private void MarkAllStatesDirty() => this.MarkStatesDirty(uint.MaxValue);
 	private void MarkStateDirty(int index) => this.MarkStatesDirty(1u << index);
-
 	private void MarkStatesDirty(uint bitmask)
 	{
 		if (this.DirtyFlag == 0) {
-			Callable.From(this.BroadcastValues).CallDeferred();
+			Callable.From(this.BroadcastChangedValues).CallDeferred();
 		}
 		this.DirtyFlag |= bitmask;
 	}
 
-	private void MarkAllStatesDirty() => this.MarkStatesDirty(uint.MaxValue);
-
-	public void ForceBroadcastSynchronizedFields() => this.MarkAllStatesDirty();
-
-	private void BroadcastValues()
+	private void BroadcastChangedValues()
 	{
 		if (
 			this.DirtyFlag == 0
-			|| NetworkManager.Instance.ConnectionState.Value
+			|| NetworkManager.Connectivity.Status.Value
 				== NetworkManager.ConnectionStateEnum.Offline
 		) {
 			return;
@@ -162,13 +166,10 @@ public partial class NetworkSynchronizer : Node
 		);
 		if (newValues.Count != 0) {
 			if (this.IsMultiplayerAuthority()) {
-				foreach (long peerId in NetworkManager.Instance.RemotePeersInScene.Select(peer => peer.Id)) {
-					this.RpcId(peerId, MethodName.RpcSetValues, this.DirtyFlag, newValues);
-				}
+				this.Rpc(MethodName.RpcSetValues, this.DirtyFlag, newValues);
 			} else {
 				this.RpcId(this.GetMultiplayerAuthority(), MethodName.RpcSetValues, this.DirtyFlag, newValues);
 			}
-		} else {
 		}
 		this.DirtyFlag = 0;
 	}
@@ -197,12 +198,18 @@ public partial class NetworkSynchronizer : Node
 	[Rpc(MultiplayerApi.RpcMode.AnyPeer)]
 	private void RpcSetValues(uint bitmask, Godot.Collections.Array values) => this.SetLocalValues(bitmask, values);
 
-    public void SetLocalValues(uint bitmask, Godot.Collections.Array values)
+    private void SetLocalValues(uint bitmask, Godot.Collections.Array values)
     {
-		this.IsUpdatingStates = true;
-		this.SynchronizedVariables
-			.Where((_, index) => (bitmask & (1u << index)) != 0)
-			.ForEach((reactVar, index) => reactVar.VariantValue = values[index]);
-		this.IsUpdatingStates = false;
+		using (this.OfflineMode()) {
+			this.SynchronizedVariables
+				.Where((_, index) => (bitmask & (1u << index)) != 0)
+				.ForEach((reactVar, index) => reactVar.VariantValue = values[index]);
+		}
     }
+
+	public IDisposable OfflineMode()
+	{
+		this.IsOffline = true;
+		return Disposable.Create(() => this.IsOffline = false);
+	}
 }

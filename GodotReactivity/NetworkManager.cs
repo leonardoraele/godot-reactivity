@@ -1,17 +1,17 @@
-using System;
 using Godot;
-using Raele.GodotReactivity.ExtensionMethods;
 
 namespace Raele.GodotReactivity;
 
 public partial class NetworkManager : Node
 {
-	// -----------------------------------------------------------------------------------------------------------------
-	// STATICS
-	// -----------------------------------------------------------------------------------------------------------------
+    // -----------------------------------------------------------------------------------------------------------------
+    // STATICS
+    // -----------------------------------------------------------------------------------------------------------------
 
-	public static NetworkManager Instance { get; private set; } = null!;
-	// public static string NetId = string.Join("", Guid.NewGuid().ToString().TakeLast(12));
+    public static NetworkManager Instance { get; private set; } = null!; // TODO Make private
+	public static SceneSynchronizationManager Scenes => NetworkManager.Instance._scenes;
+	public static NetworkManager Connectivity => NetworkManager.Instance; // TODO Turn into ConnectivityManager class
+	public static NetworkManager Spawner => NetworkManager.Instance; // TODO Turn into NodeSpawningManager class
 	public static string NetId => NetworkManager.Instance.Multiplayer?.HasMultiplayerPeer() == true
 		? NetworkManager.Instance.Multiplayer.GetUniqueId() == 1
 			? "🌐#1"
@@ -28,11 +28,11 @@ public partial class NetworkManager : Node
 	// FIELDS
 	// -----------------------------------------------------------------------------------------------------------------
 
+    private SceneSynchronizationManager _scenes = new();
 
 	// -----------------------------------------------------------------------------------------------------------------
 	// PROPERTIES
 	// -----------------------------------------------------------------------------------------------------------------
-
 
 	// -----------------------------------------------------------------------------------------------------------------
 	// SIGNALS
@@ -53,19 +53,28 @@ public partial class NetworkManager : Node
 	public override void _EnterTree()
 	{
 		base._EnterTree();
-		this.SetupInstance();
-		this.SetupConnections();
+		if (NetworkManager.Instance != null) {
+			GD.PushError($"Failed to set {nameof(NetworkManager)}.{nameof(NetworkManager.Instance)} because it is already set.");
+			this.QueueFree();
+			return;
+		}
+		NetworkManager.Instance = this;
 	}
 
-	// public override void _ExitTree()
-	// {
-	// 	base._ExitTree();
-	// }
+	public override void _ExitTree()
+	{
+		base._ExitTree();
+		if (NetworkManager.Instance == this) {
+			NetworkManager.Instance = null!;
+		}
+	}
 
-	// public override void _Ready()
-	// {
-	// 	base._Ready();
-	// }
+	public override void _Ready()
+	{
+		base._Ready();
+		this.AddChild(this._scenes);
+		this.SetupSpawns();
+	}
 
 	public override void _Process(double delta)
 	{
@@ -85,18 +94,4 @@ public partial class NetworkManager : Node
 	// SETUP METHODS
 	// -----------------------------------------------------------------------------------------------------------------
 
-	private void SetupInstance()
-	{
-		if (NetworkManager.Instance != null) {
-			GD.PushError($"Failed to set {nameof(NetworkManager)}.{nameof(NetworkManager.Instance)} because it is already set.");
-			this.QueueFree();
-			return;
-		}
-		NetworkManager.Instance = this;
-		this.TreeExiting += () => {
-			if (NetworkManager.Instance == this) {
-				NetworkManager.Instance = null!;
-			}
-		};
-	}
 }

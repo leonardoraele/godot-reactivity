@@ -79,4 +79,9 @@ public static class ExtensionMethods
 			child.QueueFree();
 		}
 	}
+
+	public static bool SafeIsMultiplayerAuthority(this Node node)
+		=> node.Multiplayer.HasMultiplayerPeer()
+			? node.IsMultiplayerAuthority()
+			: true;
 }
