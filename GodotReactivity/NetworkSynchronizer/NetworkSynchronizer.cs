@@ -42,7 +42,7 @@ public partial class NetworkSynchronizer : Node
 
 	private List<ReactiveVariant> SynchronizedVariables = new();
 	private uint DirtyFlag = 0;
-	private bool IsOffline = false;
+	private bool InOfflineMode = false;
 	private Node ParentCache = null!;
 
 	// -----------------------------------------------------------------------------------------------------------------
@@ -75,6 +75,18 @@ public partial class NetworkSynchronizer : Node
 			.Select(field => {
 				if (field.GetValue(this.ParentCache) is not ReactiveVariant state) {
 					GD.PushError($"[{nameof(NetworkSynchronizer)}] Failed to synchronize field {field.Name}. Cause: Field is not of type {nameof(ReactiveVariant)}.");
+					return null;
+				}
+				return state;
+			})
+			.WhereNotNull()
+			.ForEach(this.RegisterVariable);
+		this.ParentCache.GetType()
+			.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+			.Where(prop => prop.GetCustomAttribute(typeof(SynchronizedAttribute)) != null)
+			.Select(prop => {
+				if (prop.GetValue(this.ParentCache) is not ReactiveVariant state) {
+					GD.PushError($"[{nameof(NetworkSynchronizer)}] Failed to synchronize property {prop.Name}. Cause: Property is not of type {nameof(ReactiveVariant)}.");
 					return null;
 				}
 				return state;
@@ -118,7 +130,7 @@ public partial class NetworkSynchronizer : Node
 	{
 		int stateIndex = this.SynchronizedVariables.Count;
 		state.Changed += () => {
-			if (!this.IsOffline) {
+			if (!this.InOfflineMode) {
 				this.MarkStateDirty(stateIndex);
 			}
 		};
@@ -209,7 +221,7 @@ public partial class NetworkSynchronizer : Node
 
 	public IDisposable OfflineMode()
 	{
-		this.IsOffline = true;
-		return Disposable.Create(() => this.IsOffline = false);
+		this.InOfflineMode = true;
+		return Disposable.Create(() => this.InOfflineMode = false);
 	}
 }

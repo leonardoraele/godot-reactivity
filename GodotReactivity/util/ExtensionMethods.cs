@@ -84,4 +84,10 @@ public static class ExtensionMethods
 		=> node.Multiplayer.HasMultiplayerPeer()
 			? node.IsMultiplayerAuthority()
 			: true;
+
+	public static long GetUid(this Resource resource)
+		=> ResourceLoader.GetResourceUid(resource.ResourcePath);
+
+	public static string GetUidStr(this Resource resource)
+		=> ResourceUid.IdToText(resource.GetUid());
 }

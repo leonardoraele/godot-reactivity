@@ -104,7 +104,7 @@ public partial class NetworkManager : Node
 		=> this.Spawn(scene, this.GetNode(parentPath), args);
 
 	public void Spawn(PackedScene scene, Node parent, params Variant[] args)
-		=> this.Spawn(ResourceUid.IdToText(ResourceLoader.GetResourceUid(scene.ResourcePath)), parent, args);
+		=> this.Spawn(scene.GetUidStr(), parent, args);
 
 	public void Spawn(string sceneUid, NodePath parentPath, params Variant[] args)
 		=> this.Spawn(sceneUid, this.GetNode(parentPath), args);
@@ -228,7 +228,7 @@ public partial class NetworkManager : Node
             IEnumerable<SpawnedNodeRecord> spawnRecords = this.SpawnedNodes.Values
 				.Where(record => record.Node.IsMultiplayerAuthority())
 				.Where(record => record.AncestorSpawnNetId == null);
-			GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), $"Detected new peer in current scene. Spawning {spawnRecords.Count()} nodes...", new { PeerId = peer.Id });
+			GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), $"Detected new peer in current scene. Spawning {spawnRecords.Count()} nodes...", new { Scene = this.LocalPeer?.CurrentScene.Value ?? "null", PeerId = peer.Id });
 			spawnRecords.ForEach(record =>
 				this.RpcId(
 					peer.Id,
