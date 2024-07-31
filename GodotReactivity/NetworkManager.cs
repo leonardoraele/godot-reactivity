@@ -10,6 +10,7 @@ public partial class NetworkManager : Node
 
     public static NetworkManager Instance { get; private set; } = null!; // TODO Make private
 	public static SceneSynchronizationManager Scenes => NetworkManager.Instance._scenes;
+	public static RpcUtilityManager RpcUtil => NetworkManager.Instance._rpcUtil;
 	public static NetworkManager Connectivity => NetworkManager.Instance; // TODO Turn into ConnectivityManager class
 	public static NetworkManager Spawner => NetworkManager.Instance; // TODO Turn into NodeSpawningManager class
 	public static string NetId => NetworkManager.Instance.Multiplayer?.HasMultiplayerPeer() == true
@@ -29,28 +30,29 @@ public partial class NetworkManager : Node
 	// -----------------------------------------------------------------------------------------------------------------
 
     private SceneSynchronizationManager _scenes = new();
+    private RpcUtilityManager _rpcUtil = new();
 
-	// -----------------------------------------------------------------------------------------------------------------
-	// PROPERTIES
-	// -----------------------------------------------------------------------------------------------------------------
+    // -----------------------------------------------------------------------------------------------------------------
+    // PROPERTIES
+    // -----------------------------------------------------------------------------------------------------------------
 
-	// -----------------------------------------------------------------------------------------------------------------
-	// SIGNALS
-	// -----------------------------------------------------------------------------------------------------------------
+    // -----------------------------------------------------------------------------------------------------------------
+    // SIGNALS
+    // -----------------------------------------------------------------------------------------------------------------
 
-	// [Signal] public delegate
+    // [Signal] public delegate
 
-	// -----------------------------------------------------------------------------------------------------------------
-	// INTERNAL TYPES
-	// -----------------------------------------------------------------------------------------------------------------
+    // -----------------------------------------------------------------------------------------------------------------
+    // INTERNAL TYPES
+    // -----------------------------------------------------------------------------------------------------------------
 
-	// public enum
+    // public enum
 
-	// -----------------------------------------------------------------------------------------------------------------
-	// EVENTS
-	// -----------------------------------------------------------------------------------------------------------------
+    // -----------------------------------------------------------------------------------------------------------------
+    // EVENTS
+    // -----------------------------------------------------------------------------------------------------------------
 
-	public override void _EnterTree()
+    public override void _EnterTree()
 	{
 		base._EnterTree();
 		if (NetworkManager.Instance != null) {
@@ -59,6 +61,7 @@ public partial class NetworkManager : Node
 			return;
 		}
 		NetworkManager.Instance = this;
+		this.Disconnect();
 	}
 
 	public override void _ExitTree()
@@ -73,6 +76,7 @@ public partial class NetworkManager : Node
 	{
 		base._Ready();
 		this.AddChild(this._scenes);
+		this.AddChild(this._rpcUtil);
 		this.SetupSpawns();
 	}
 

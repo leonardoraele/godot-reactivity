@@ -5,26 +5,27 @@ namespace Raele.GodotReactivity;
 
 public partial class SceneSynchronizationManager : Node
 {
-	// -----------------------------------------------------------------------------------------------------------------
-	// STATICS
-	// -----------------------------------------------------------------------------------------------------------------
+    // -----------------------------------------------------------------------------------------------------------------
+    // STATICS
+    // -----------------------------------------------------------------------------------------------------------------
 
-	// public static readonly string MyConstant = "";
+    // public static readonly string MyConstant = "";
 
-	// -----------------------------------------------------------------------------------------------------------------
-	// EXPORTS
-	// -----------------------------------------------------------------------------------------------------------------
+    // -----------------------------------------------------------------------------------------------------------------
+    // EXPORTS
+    // -----------------------------------------------------------------------------------------------------------------
 
-	// [Export] public
+    // [Export] public
 
-	// -----------------------------------------------------------------------------------------------------------------
-	// FIELDS
-	// -----------------------------------------------------------------------------------------------------------------
+    // -----------------------------------------------------------------------------------------------------------------
+    // FIELDS
+    // -----------------------------------------------------------------------------------------------------------------
 
-	public bool SynchronizationEnabled { get; private set; } = false;
+    public bool SynchronizationEnabled { get; private set; } = false;
 	public Node? SynchronizedScene = null;
 	private string? SynchronizedSceneFilePath = null;
 	private Variant[]? SynchronizedSceneArguments = [];
+    private string? FallbackSceneFilePath;
 
 	// -----------------------------------------------------------------------------------------------------------------
 	// PROPERTIES
@@ -67,12 +68,12 @@ public partial class SceneSynchronizationManager : Node
 		NetworkManager.Connectivity.PeerConnected -= this.OnPeerConnected;
 	}
 
-	// public override void _Ready()
-	// {
-	// 	base._Ready();
-	// }
+    // public override void _Ready()
+    // {
+    // 	base._Ready();
+    // }
 
-	public override void _Process(double delta)
+    public override void _Process(double delta)
 	{
 		base._Process(delta);
 		this.Multiplayer.Poll();
@@ -170,8 +171,9 @@ public partial class SceneSynchronizationManager : Node
 	/// Use
 	/// SceneManager.SynchronizedScene to access the synchronized scene.
 	/// </summary>
-	public void StartSynchronization()
+	public void StartSynchronization(string? fallbackSceneFilePath = null)
 	{
+		this.FallbackSceneFilePath = fallbackSceneFilePath;
 		this.SynchronizationEnabled = true;
 		this.SynchronizedScene = this.GetTree().CurrentScene;
 		this.GetTree().TreeChanged += this.CheckSceneChanged;
@@ -189,19 +191,25 @@ public partial class SceneSynchronizationManager : Node
 		}
 	}
 
+	public void StopSynchronizationAndFallBack(string? fallbackSceneFilePath = null)
+	{
+		this.StopSynchronization();
+		fallbackSceneFilePath ??= this.FallbackSceneFilePath;
+		if (fallbackSceneFilePath != null) {
+			this.GetTree().ChangeSceneToFile(fallbackSceneFilePath);
+			this.FallbackSceneFilePath = null;
+		}
+	}
+
 	public void StopSynchronization()
 	{
+		if (!this.SynchronizationEnabled) {
+			return;
+		}
 		this.SynchronizationEnabled = false;
 		this.SynchronizedScene = null;
 		this.SynchronizedSceneArguments = [];
 		this.GetTree().TreeChanged -= this.CheckSceneChanged;
-	}
-
-	public async void StopSynchronization(string fallbackSceneFilePath)
-	{
-		this.StopSynchronization();
-		await this.RemoveAndFreeCurrentScene();
-		this.GetTree().ChangeSceneToFile(fallbackSceneFilePath);
 	}
 
 	private async void ChangeToSynchronizedScene()

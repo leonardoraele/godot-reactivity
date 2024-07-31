@@ -109,7 +109,7 @@ public partial class NetworkManager : Node
 		this.Multiplayer.MultiplayerPeer = wsServerPeer;
 		this.Multiplayer.PeerConnected += this.OnPeerConnected;
 		this.Multiplayer.PeerDisconnected += this.OnPeerDisconnected;
-		this.AddPeerForSelf();
+		this.UpdateLocalPeer();
 		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Server started.");
 		GD.PushWarning(nameof(this.OpenMultiplayerServer));
 		this.Status.Value = ConnectionStateEnum.Host;
@@ -142,17 +142,21 @@ public partial class NetworkManager : Node
 			this.Multiplayer.ConnectionFailed -= source.SetCanceled;
 		}
 		GD.PushWarning(nameof(ConnectToServer));
-		this.AddPeerForSelf();
+		this.UpdateLocalPeer();
 		this.Status.Value = ConnectionStateEnum.ClientConnected;
 		this.EmitSignal(SignalName.ConnectedToServer);
 	}
 
-    private void AddPeerForSelf()
+    private void UpdateLocalPeer()
 	{
 		long id = this.Multiplayer.GetUniqueId();
 		this.LocalPeer = this._connectedPeers[id] = new() {
 			Id = id,
-			CurrentScene = new(this.GetTree().CurrentScene?.GetPath())
+			CurrentScene = new(
+				this.GetTree().CurrentScene is Node node && node.IsInsideTree()
+					? node.GetPath()
+					: null
+			)
 		};
 	}
 
@@ -166,8 +170,9 @@ public partial class NetworkManager : Node
 	private void OnPeerDisconnected(long id)
 	{
 		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), $"Peer #{id} disconnected.");
+		ConnectedPeer peer = this._connectedPeers[id];
 		this._connectedPeers.Remove(id);
-		this.EmitSignal(SignalName.PeerDisconnected, id);
+		this.EmitSignal(SignalName.PeerDisconnected, peer);
 	}
 
 	public void Disconnect()
@@ -209,7 +214,8 @@ public partial class NetworkManager : Node
 	{
 		this._connectedPeers.Clear();
 		this.Multiplayer.MultiplayerPeer?.Close();
-		this.Multiplayer.MultiplayerPeer = null;
+		this.Multiplayer.MultiplayerPeer = new OfflineMultiplayerPeer();
 		this.Status.Value = ConnectionStateEnum.Offline;
+		this.UpdateLocalPeer();
 	}
 }

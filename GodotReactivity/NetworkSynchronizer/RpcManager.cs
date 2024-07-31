@@ -4,15 +4,17 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Godot;
+using Raele.GodotReactivity.ExtensionMethods;
 
 namespace Raele.GodotReactivity;
 
-public partial class NetworkManager : Node
+public partial class RpcUtilityManager : Node
 {
 	// -----------------------------------------------------------------------------------------------------------------
 	// STATICS
 	// -----------------------------------------------------------------------------------------------------------------
 
+	// public static readonly string MyConstant = "";
 
 	// -----------------------------------------------------------------------------------------------------------------
 	// EXPORTS
@@ -24,6 +26,7 @@ public partial class NetworkManager : Node
 	// FIELDS
 	// -----------------------------------------------------------------------------------------------------------------
 
+	// BiDiRpc fields
 	private Dictionary<int, TaskCompletionSource<Variant>> PendingBidiRpcCalls = new();
 	private int lastBidiRpcCallId = 0;
 
@@ -32,17 +35,20 @@ public partial class NetworkManager : Node
 	// -----------------------------------------------------------------------------------------------------------------
 
 
+
 	// -----------------------------------------------------------------------------------------------------------------
 	// SIGNALS
 	// -----------------------------------------------------------------------------------------------------------------
 
-	// [Signal] public delegate
+	// [Signal] public delegate void EventHandler()
 
 	// -----------------------------------------------------------------------------------------------------------------
 	// INTERNAL TYPES
 	// -----------------------------------------------------------------------------------------------------------------
 
-	// public enum
+	// private enum Type {
+	// 	Value1,
+	// }
 
 	// -----------------------------------------------------------------------------------------------------------------
 	// EVENTS
@@ -51,11 +57,6 @@ public partial class NetworkManager : Node
 	// public override void _EnterTree()
 	// {
 	// 	base._EnterTree();
-	// }
-
-	// public override void _ExitTree()
-	// {
-	// 	base._ExitTree();
 	// }
 
 	// public override void _Ready()
@@ -79,12 +80,6 @@ public partial class NetworkManager : Node
 	// -----------------------------------------------------------------------------------------------------------------
 	// BI-DIRECTIONAL RPC METHODS
 	// -----------------------------------------------------------------------------------------------------------------
-
-	// public Task BiDiRpc(Node node, StringName method, params Variant[] args)
-	// 	=> Task.WhenAll(this.PeersInScene.Select(peer => this.BiDiRpcId(peer.Id, node, method, args)));
-
-	// public Task BiDiRpc(NodePath path, StringName method, params Variant[] args)
-	// 	=> Task.WhenAll(this.PeersInScene.Select(peer => this.BiDiRpcId(peer.Id, path, method, args)));
 
 	public async Task<Variant> BiDiRpcId(long peerId, Node node, StringName method, params Variant[] args)
 		=> await this.BiDiRpcId(peerId, node.GetPath(), method, args);
@@ -130,5 +125,24 @@ public partial class NetworkManager : Node
 			source.SetException(new Exception(message));
 			this.PendingBidiRpcCalls.Remove(id);
 		}
+	}
+
+	// -----------------------------------------------------------------------------------------------------------------
+	// SAFE-RPC METHODS
+	// -----------------------------------------------------------------------------------------------------------------
+
+	public void RpcPeersInSceneAndLocal(Node target, StringName methodName, params Variant[] args)
+	{
+		NetworkManager.Connectivity.ConnectedPeers.Values
+			.Where(peer => NetworkManager.Connectivity.LocalPeer?.IsInSameScene(peer) == true)
+			.ForEach(peer => target.RpcId(peer.Id, methodName, args));
+	}
+
+	public void RpcPeersInScene(Node target, StringName methodName, params Variant[] args)
+	{
+		NetworkManager.Connectivity.ConnectedPeers.Values
+			.Where(peer => peer != NetworkManager.Connectivity.LocalPeer)
+			.Where(peer => NetworkManager.Connectivity.LocalPeer?.IsInSameScene(peer) == true)
+			.ForEach(peer => target.RpcId(peer.Id, methodName, args));
 	}
 }

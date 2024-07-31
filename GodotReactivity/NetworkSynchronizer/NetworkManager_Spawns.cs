@@ -111,7 +111,7 @@ public partial class NetworkManager : Node
 
 	public void Spawn(string sceneUid, Node parent, params Variant[] args)
 	{
-		if (!parent.IsMultiplayerAuthority()) {
+		if (!parent.SafeIsMultiplayerAuthority()) {
 			GD.PushError(NetworkManager.NetId, nameof(NetworkManager), "Failed to spawn network node. Cause: Local peer is not the multiplayer authority of the parent node.", new { sceneUid, ParentPath = parent.GetPath() });
 			return;
 		}

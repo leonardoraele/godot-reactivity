@@ -191,7 +191,7 @@ public partial class NetworkSynchronizer : Node
 		if (this.IsMultiplayerAuthority()) {
 			return;
 		}
-		Variant values = await NetworkManager.Instance.BiDiRpcId(
+		Variant values = await NetworkManager.RpcUtil.BiDiRpcId(
 			this.GetMultiplayerAuthority(),
 			this,
 			MethodName.GetLocalValues,
