@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using Godot;
 
 namespace Raele.GodotReactivity.ExtensionMethods;
@@ -81,15 +82,4 @@ public static class ExtensionMethods
 			child.QueueFree();
 		}
 	}
-
-	public static bool SafeIsMultiplayerAuthority(this Node node)
-		=> node.Multiplayer.HasMultiplayerPeer()
-			? node.IsMultiplayerAuthority()
-			: true;
-
-	public static long GetUid(this Resource resource)
-		=> ResourceLoader.GetResourceUid(resource.ResourcePath);
-
-	public static string GetUidStr(this Resource resource)
-		=> ResourceUid.IdToText(resource.GetUid());
 }

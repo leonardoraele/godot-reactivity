@@ -69,35 +69,12 @@ public partial class NetworkSynchronizer : Node
 	{
 		base._EnterTree();
 		this.ParentCache = this.GetParent();
-		this.ParentCache.GetType()
-			.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-			.Where(field => field.GetCustomAttribute(typeof(SynchronizedAttribute)) != null)
-			.Select(field => {
-				if (field.GetValue(this.ParentCache) is not ReactiveVariant state) {
-					GD.PushError($"[{nameof(NetworkSynchronizer)}] Failed to synchronize field {field.Name}. Cause: Field is not of type {nameof(ReactiveVariant)}.");
-					return null;
-				}
-				return state;
-			})
-			.WhereNotNull()
-			.ForEach(this.RegisterVariable);
-		this.ParentCache.GetType()
-			.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-			.Where(prop => prop.GetCustomAttribute(typeof(SynchronizedAttribute)) != null)
-			.Select(prop => {
-				if (prop.GetValue(this.ParentCache) is not ReactiveVariant state) {
-					GD.PushError($"[{nameof(NetworkSynchronizer)}] Failed to synchronize property {prop.Name}. Cause: Property is not of type {nameof(ReactiveVariant)}.");
-					return null;
-				}
-				return state;
-			})
-			.WhereNotNull()
-			.ForEach(this.RegisterVariable);
-		NetworkManager.Spawner.RegisterSynchronizer(this);
+		this.FindAndRegisterParentVariables();
+		NetworkManager.Spawner.RegisterSynchronizer(this, this.ParentCache);
 		NetworkManager.Scenes.PeerChangedScene += OnPeerChangedScene;
 	}
 
-	public override void _ExitTree()
+    public override void _ExitTree()
 	{
 		base._ExitTree();
 		NetworkManager.Scenes.PeerChangedScene -= OnPeerChangedScene;
@@ -125,6 +102,34 @@ public partial class NetworkSynchronizer : Node
 	// -----------------------------------------------------------------------------------------------------------------
 	// METHODS
 	// -----------------------------------------------------------------------------------------------------------------
+
+    private void FindAndRegisterParentVariables()
+    {
+		this.ParentCache.GetType()
+			.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+			.Where(field => field.GetCustomAttribute(typeof(SynchronizedAttribute)) != null)
+			.Select(field => {
+				if (field.GetValue(this.ParentCache) is not ReactiveVariant state) {
+					GD.PushError($"[{nameof(NetworkSynchronizer)}] Failed to synchronize field {field.Name}. Cause: Field is not of type {nameof(ReactiveVariant)}.");
+					return null;
+				}
+				return state;
+			})
+			.WhereNotNull()
+			.ForEach(this.RegisterVariable);
+		this.ParentCache.GetType()
+			.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+			.Where(prop => prop.GetCustomAttribute(typeof(SynchronizedAttribute)) != null)
+			.Select(prop => {
+				if (prop.GetValue(this.ParentCache) is not ReactiveVariant state) {
+					GD.PushError($"[{nameof(NetworkSynchronizer)}] Failed to synchronize property {prop.Name}. Cause: Property is not of type {nameof(ReactiveVariant)}.");
+					return null;
+				}
+				return state;
+			})
+			.WhereNotNull()
+			.ForEach(this.RegisterVariable);
+    }
 
 	private void RegisterVariable(ReactiveVariant state)
 	{

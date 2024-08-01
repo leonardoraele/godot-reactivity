@@ -14,7 +14,7 @@ public partial class NetworkManager : Node
 	// -----------------------------------------------------------------------------------------------------------------
 
 	public const string SERVER_BIND_ADDRESS = "*";
-	public const int DEFAULT_PORT = 3000;
+	public const int DEFAULT_PORT = 4000;
 
 	// -----------------------------------------------------------------------------------------------------------------
 	// EXPORTS

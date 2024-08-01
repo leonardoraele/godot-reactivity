@@ -104,29 +104,29 @@ public partial class NetworkManager : Node
 		=> this.Spawn(scene, this.GetNode(parentPath), args);
 
 	public void Spawn(PackedScene scene, Node parent, params Variant[] args)
-		=> this.Spawn(scene.GetUidStr(), parent, args);
+		=> this.Spawn(scene.ResourcePath, parent, args);
 
-	public void Spawn(string sceneUid, NodePath parentPath, params Variant[] args)
-		=> this.Spawn(sceneUid, this.GetNode(parentPath), args);
+	public void Spawn(string scenePath, NodePath parentPath, params Variant[] args)
+		=> this.Spawn(scenePath, this.GetNode(parentPath), args);
 
-	public void Spawn(string sceneUid, Node parent, params Variant[] args)
+	public void Spawn(string scenePath, Node parent, params Variant[] args)
 	{
-		if (!parent.SafeIsMultiplayerAuthority()) {
-			GD.PushError(NetworkManager.NetId, nameof(NetworkManager), "Failed to spawn network node. Cause: Local peer is not the multiplayer authority of the parent node.", new { sceneUid, ParentPath = parent.GetPath() });
+		if (!parent.IsMultiplayerAuthority()) {
+			GD.PushError(NetworkManager.NetId, nameof(NetworkManager), "Failed to spawn network node. Cause: Local peer is not the multiplayer authority of the parent node.", new { scenePath, ParentPath = parent.GetPath() });
 			return;
 		}
 		byte[] netIdBytes = Guid.NewGuid().ToByteArray();
-		this.Rpc(MethodName.RpcSpawn, sceneUid, parent.GetPath(), netIdBytes, new Godot.Collections.Array(args));
+		this.Rpc(MethodName.RpcSpawn, scenePath, parent.GetPath(), netIdBytes, new Godot.Collections.Array(args));
 	}
 
 	[Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = true)]
-	private void RpcSpawn(string uid, NodePath parentPath, Variant netIdBytes, Godot.Collections.Array args)
+	private void RpcSpawn(string scenePath, NodePath parentPath, Variant netIdBytes, Godot.Collections.Array args)
 	{
-		PackedScene scene = ResourceLoader.Load<PackedScene?>(ResourceUid.GetIdPath(ResourceUid.TextToId(uid)))
-			?? throw new Exception("Failed to spawn scene for requested RpcSpawn call. uid = " + uid + " / HasId:" + ResourceUid.HasId(ResourceUid.TextToId(uid)));
+		PackedScene scene = ResourceLoader.Load<PackedScene?>(scenePath)
+			?? throw new Exception("Failed to spawn scene for requested RpcSpawn call. path = " + scenePath);
 		if (this.Multiplayer.GetRemoteSenderId() != this.Multiplayer.GetUniqueId()) {
 			if (!this.ConnectedPeers.TryGetValue(this.Multiplayer.GetRemoteSenderId(), out ConnectedPeer? peer)) {
-				GD.PushError(NetworkManager.NetId, nameof(NetworkManager), "Failed to spawn network node. Cause: Unknown sender peer.", new { uid, RpcSenderId = this.Multiplayer.GetRemoteSenderId() });
+				GD.PushError(NetworkManager.NetId, nameof(NetworkManager), "Failed to spawn network node. Cause: Unknown sender peer.", new { scenePath, RpcSenderId = this.Multiplayer.GetRemoteSenderId() });
 				return;
 			}
 			if (this.LocalPeer?.IsInSameScene(peer) != true) {
@@ -135,17 +135,17 @@ public partial class NetworkManager : Node
 			}
 		}
 		if (this.GetNodeOrNull(parentPath) is not Node parent) {
-			GD.PushError(NetworkManager.NetId, nameof(NetworkManager), "Failed to spawn network node. Cause: Parent node not found.", new { uid, parentPath });
+			GD.PushError(NetworkManager.NetId, nameof(NetworkManager), "Failed to spawn network node. Cause: Parent node not found.", new { scenePath, parentPath });
 			return;
 		}
 		if (parent.GetMultiplayerAuthority() != this.Multiplayer.GetRemoteSenderId()) {
-			GD.PushError(NetworkManager.NetId, nameof(NetworkManager), "Failed to spawn network node. Cause: Rpc sender is not multiplayer authority of spawn parent node.", new { uid, parentPath, AuthorityId = parent.GetMultiplayerAuthority(), RpcSenderId = this.Multiplayer.GetRemoteSenderId() });
+			GD.PushError(NetworkManager.NetId, nameof(NetworkManager), "Failed to spawn network node. Cause: Rpc sender is not multiplayer authority of spawn parent node.", new { scenePath, parentPath, AuthorityId = parent.GetMultiplayerAuthority(), RpcSenderId = this.Multiplayer.GetRemoteSenderId() });
 			throw new Exception($"{nameof(NetworkManager)} failed to spawn {scene} at {parentPath}. Only multiplayer authority can spawn nodes.");
 		}
         Node instance = scene.Instantiate();
 		instance.Name = new Guid(netIdBytes.AsByteArray()).ToString();
 		instance.AddToGroup(NetworkManager.SPAWNED_GROUP);
-		this.RegisterSpawnedNode(instance, uid, args);
+		this.RegisterSpawnedNode(instance, scenePath, args);
 		parent.AddChild(instance);
 		if (instance.HasMethod("_NetworkSpawned")) { // TODO Use StringName instead
 			using (this.SpawnedNodes[instance.Name].Synchronizer?.OfflineMode()) {
@@ -156,7 +156,7 @@ public partial class NetworkManager : Node
 			// this.SpawnedNodes[instance.Name].Synchronizer?.Update();
 			this.RpcId(instance.GetMultiplayerAuthority(), MethodName.RpcSpawnDescendants, netIdBytes);
 		}
-		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Network-spawned scene", uid, "as", instance.Name);
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Network-spawned scene", scenePath, "as", instance.Name);
 	}
 
 	private void RegisterSpawnedNode(Node node, string sceneUid, Godot.Collections.Array args)
@@ -190,6 +190,11 @@ public partial class NetworkManager : Node
 			GD.PushError(NetworkManager.NetId, nameof(NetworkManager), "Failed to register network synchronizer. Cause: Synchronizer not in the tree. (parent is null)");
 			return;
 		}
+		this.RegisterSynchronizer(synchronizer, parent);
+	}
+
+	public void RegisterSynchronizer(NetworkSynchronizer synchronizer, Node parent)
+	{
 		if (!parent.IsInGroup(SPAWNED_GROUP)) {
 			// Not a spawned node; no need to register
 			return;
