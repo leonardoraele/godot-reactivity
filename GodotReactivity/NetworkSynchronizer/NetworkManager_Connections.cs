@@ -27,7 +27,7 @@ public partial class NetworkManager : Node
 	// -----------------------------------------------------------------------------------------------------------------
 
 	public ReactiveState<ConnectionStateEnum> Status = new(ConnectionStateEnum.Offline);
-    public ConnectedPeer? LocalPeer { get; private set; } // null if offline; never null while online // TODO Should be reactive
+    public ConnectedPeer LocalPeer { get; private set; } = null!; // This is set in _EnterTree()
 	private ReactiveDictionary<long, ConnectedPeer> _connectedPeers = new();
 
     // -----------------------------------------------------------------------------------------------------------------

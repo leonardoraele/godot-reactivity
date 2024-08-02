@@ -131,18 +131,29 @@ public partial class RpcUtilityManager : Node
 	// SAFE-RPC METHODS
 	// -----------------------------------------------------------------------------------------------------------------
 
-	public void RpcPeersInSceneAndLocal(Node target, StringName methodName, params Variant[] args)
+	public void RpcAllPeersInScene(Node target, StringName methodName, params Variant[] args)
 	{
 		NetworkManager.Connectivity.ConnectedPeers.Values
-			.Where(peer => NetworkManager.Connectivity.LocalPeer?.IsInSameScene(peer) == true)
+			.Where(NetworkManager.Connectivity.LocalPeer.IsInSameScene)
 			.ForEach(peer => target.RpcId(peer.Id, methodName, args));
 	}
 
-	public void RpcPeersInScene(Node target, StringName methodName, params Variant[] args)
+	public void RpcOtherPeersInScene(Node target, StringName methodName, params Variant[] args)
 	{
 		NetworkManager.Connectivity.ConnectedPeers.Values
 			.Where(peer => peer != NetworkManager.Connectivity.LocalPeer)
-			.Where(peer => NetworkManager.Connectivity.LocalPeer?.IsInSameScene(peer) == true)
+			.Where(NetworkManager.Connectivity.LocalPeer.IsInSameScene)
 			.ForEach(peer => target.RpcId(peer.Id, methodName, args));
+	}
+
+	public void RpcAuthorityInScene(Node target, StringName methodName, params Variant[] args)
+	{
+		if (
+			!NetworkManager.Connectivity.ConnectedPeers.TryGetValue(target.GetMultiplayerAuthority(), out ConnectedPeer? authorityPeer)
+			|| !authorityPeer.IsInSameScene(NetworkManager.Connectivity.LocalPeer)
+		) {
+			return;
+		}
+		target.RpcId(authorityPeer.Id, methodName, args);
 	}
 }
