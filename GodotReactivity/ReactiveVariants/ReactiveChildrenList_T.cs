@@ -16,21 +16,22 @@ public class ReactiveChildrenList<T>
 {
 	public Node _parent;
 
-	public ReactiveChildrenList(Node parent) {
+	public ReactiveChildrenList(Node parent)
+	{
 		this._parent = parent;
-		this._parent.ChildEnteredTree += this._NotifyChanged;
-		this._parent.ChildExitingTree += this._NotifyChanged;
+		this._parent.ChildEnteredTree += this.OnChildrenListChanged;
+		this._parent.ChildExitingTree += this.OnChildrenListChanged;
 		this._parent.ChildOrderChanged += this.NotifyChanged;
 	}
 
 	~ReactiveChildrenList()
 	{
-		this._parent.ChildEnteredTree -= this._NotifyChanged;
-		this._parent.ChildExitingTree -= this._NotifyChanged;
+		this._parent.ChildEnteredTree -= this.OnChildrenListChanged;
+		this._parent.ChildExitingTree -= this.OnChildrenListChanged;
 		this._parent.ChildOrderChanged -= this.NotifyChanged;
 	}
 
-	private void _NotifyChanged(Node _node) => this.NotifyChanged();
+	private void OnChildrenListChanged(Node _child) => this.NotifyChanged();
 
 	public override IEnumerable<T?> Value {
 		get {
@@ -64,7 +65,11 @@ public class ReactiveChildrenList<T>
 	public void Add(T? item) => this._parent.AddChild(item);
 	public void Clear() => this._parent.RemoveAndDeleteAllChildren();
 	public bool Contains(T? item) => this.Value.Contains(item);
-	public void CopyTo(T?[] array, int arrayIndex) => this.Value.ToArray().CopyTo(array, arrayIndex);
+	public void CopyTo(T?[] array, int arrayIndex)
+	{
+		this.NotifyUsed();
+		this.Value.ToArray().CopyTo(array, arrayIndex);
+	}
 	public bool Remove(T? item)
 	{
 		if (this.Value.Contains(item)) {

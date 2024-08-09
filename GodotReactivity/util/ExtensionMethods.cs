@@ -82,4 +82,17 @@ public static class ExtensionMethods
 			child.QueueFree();
 		}
 	}
+
+	public static bool IsInstanceValid(this GodotObject obj) => GodotObject.IsInstanceValid(obj);
+
+	public static int FindIndex<T>(this IEnumerable<T> source, Func<T, bool> predicate)
+	{
+        IEnumerator<T> enumerator = source.GetEnumerator();
+		for (int i = 0; enumerator.MoveNext(); i++) {
+			if (predicate(enumerator.Current)) {
+				return i;
+			}
+		}
+		return -1;
+	}
 }

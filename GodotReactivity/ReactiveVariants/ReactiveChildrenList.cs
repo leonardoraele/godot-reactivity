@@ -12,7 +12,7 @@ public class ReactiveChildrenList
 	IList<Node>,
 	IReadOnlyList<Node>
 {
-	public Node _parent;
+	private Node _parent;
 
 	public ReactiveChildrenList(Node parent) {
 		this._parent = parent;
@@ -61,7 +61,11 @@ public class ReactiveChildrenList
     public void Add(Node item) => this._parent.AddChild(item);
 	public void Clear() => this._parent.RemoveAndDeleteAllChildren();
 	public bool Contains(Node item) => this.Value.Contains(item);
-	public void CopyTo(Node[] array, int arrayIndex) => this.Value.CopyTo(array, arrayIndex);
+	public void CopyTo(Node[] array, int arrayIndex)
+	{
+		this.NotifyUsed();
+		this.Value.CopyTo(array, arrayIndex);
+	}
 	public bool Remove(Node item)
 	{
 		if (this.Value.Contains(item)) {
