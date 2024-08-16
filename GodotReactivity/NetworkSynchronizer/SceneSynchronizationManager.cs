@@ -99,7 +99,7 @@ public partial class SceneSynchronizationManager : Node
 				peer.Id,
 				MethodName.RpcChangeSynchronizedSceneToFile,
 				this.SynchronizedSceneFilePath ?? "",
-				new Godot.Collections.Array(this.SynchronizedSceneArguments)
+				new Godot.Collections.Array(this.SynchronizedSceneArguments ?? [])
 			);
 		}
 	}
@@ -139,7 +139,7 @@ public partial class SceneSynchronizationManager : Node
 		string? scenePathStr = scenePath.IsEmpty ? null : scenePath;
 		string fromScene = peer.CurrentScene.Value?.IsEmpty != false ? "null" : peer.CurrentScene.Value;
 		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), $"Peer #{peer.Id} changed scenes.", fromScene, "->", scenePathStr ?? "null");
-		peer.CurrentScene.Value = scenePathStr == null ? null : scenePathStr;
+		peer.CurrentScene.Value = scenePathStr == null ? null : new NodePath(scenePathStr);
 		this.EmitSignal(SignalName.PeerChangedScene, peer);
 	}
 
