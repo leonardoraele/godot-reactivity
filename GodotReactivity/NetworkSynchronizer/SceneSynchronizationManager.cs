@@ -48,6 +48,11 @@ public partial class SceneSynchronizationManager : Node
 	private string SynchronizedSceneFilePath = "";
 	private Variant[]? SynchronizedSceneArguments = [];
 
+	// Used internally to know when the current scene is being changed by the SceneSynchronizationManager. This is
+	// necessary to distinguish when the current scene is changed by the SceneSynchronizationManager itself from when it
+	// is changed manually by the user, so that we know when to stop scene synchronization.
+	private bool ChangingToSynchronizedScene = false;
+
 	// -----------------------------------------------------------------------------------------------------------------
 	// PROPERTIES
 	// -----------------------------------------------------------------------------------------------------------------
@@ -189,7 +194,8 @@ public partial class SceneSynchronizationManager : Node
 	private void OnPeerChangedScene(ConnectedPeer peer)
 	{
 		if (
-			peer.IsLocalPeer
+			!this.ChangingToSynchronizedScene
+			&& peer.IsLocalPeer
 			&& this.SynchronizationEnabled
 			&& this.SynchronizedSceneFilePath != this.TreeCache?.CurrentScene?.SceneFilePath
 		) {
@@ -227,20 +233,37 @@ public partial class SceneSynchronizationManager : Node
 		}
 		this.SynchronizationEnabled = false;
 		this.FallbackSceneFilePath = null;
+		this.PeerChangedScene -= this.OnPeerChangedScene;
 	}
 
 	private async void ChangeToSynchronizedScene()
 	{
-		string sceneFilePath = this.SynchronizedSceneFilePath;
-		await this.RemoveAndFreeCurrentScene();
+		try {
+			this.ChangingToSynchronizedScene = true;
+			await this._ChangeToSynchronizedScene();
+		} finally {
+			this.ChangingToSynchronizedScene = false;
+		}
+	}
 
-		// Check if all conditions to change scene are still valid. (either might have changed while waiting)
-		if (
-			this.TreeCache == null
-			|| this.TreeCache.CurrentScene != null
-			|| sceneFilePath != this.SynchronizedSceneFilePath
-		) {
+	private async Task _ChangeToSynchronizedScene()
+	{
+		if (this.TreeCache?.CurrentScene?.SceneFilePath == this.SynchronizedSceneFilePath) {
 			return;
+		}
+
+		{
+			string sceneFilePath = this.SynchronizedSceneFilePath;
+			await this.RemoveAndFreeCurrentScene();
+
+			// Check if all conditions to change scene are still valid. (either might have changed while waiting)
+			if (
+				this.TreeCache == null
+				|| this.TreeCache.CurrentScene != null
+				|| sceneFilePath != this.SynchronizedSceneFilePath
+			) {
+				return;
+			}
 		}
 
 		// If the synchronized scene is empty, then there's nothing more to do.
@@ -345,7 +368,12 @@ public partial class SceneSynchronizationManager : Node
 	{
 		this.SynchronizedSceneFilePath = sceneFilePath;
 		this.SynchronizedSceneArguments = [..args];
-		GD.PrintS(NetworkManager.NetId, nameof(SceneSynchronizationManager), "Synchronized scene changed to:", $"'{sceneFilePath}'", "with args:", args);
+		GD.PrintS(
+			NetworkManager.NetId,
+			nameof(SceneSynchronizationManager),
+			"Synchronized scene changed to:", $"'{sceneFilePath}'",
+			"with args:", args
+		);
 		if (this.SynchronizationEnabled) {
 			this.ChangeToSynchronizedScene();
 		}
