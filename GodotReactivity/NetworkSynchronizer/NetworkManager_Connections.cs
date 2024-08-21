@@ -34,6 +34,7 @@ public partial class NetworkManager : Node
     // PROPERTIES
     // -----------------------------------------------------------------------------------------------------------------
 
+	public bool Online => (((int) this.Status.Value) & ((int) ConnectionStateEnum._OnlineFlag)) != 0;
     public IReadOnlyDictionary<long, ConnectedPeer> ConnectedPeers => this._connectedPeers;
 	public IEnumerable<ConnectedPeer> RemotePeers => this.ConnectedPeers.Values
 		.Where(peer => peer != this.LocalPeer);
@@ -58,11 +59,18 @@ public partial class NetworkManager : Node
 	// INTERNAL TYPES
 	// -----------------------------------------------------------------------------------------------------------------
 
-	public enum ConnectionStateEnum {
-		Offline,
-		Host,
-		ClientConnecting,
-		ClientConnected,
+	/// <summary>
+	/// Represents the state of the network connection.
+	///
+	/// First 4 bits determines the type of the connection: if 0 = is offline, 1 = is server, 2 = is client.
+	/// Bits 5~8 determine the state of the connection: 0 = offline, 1 = connecting, 2 = connected/online.
+	/// </summary>
+	public enum ConnectionStateEnum: int {
+		Offline = 0,
+		_OnlineFlag = 2 << 4,
+		Hosting = 1 + (2 << 4),
+		ClientConnecting = 2 + (1 << 4),
+		ClientConnected = 2 + (2 << 4),
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------
@@ -112,7 +120,7 @@ public partial class NetworkManager : Node
 		this.UpdateLocalPeer();
 		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Server started.");
 		GD.PushWarning(nameof(this.OpenMultiplayerServer));
-		this.Status.Value = ConnectionStateEnum.Host;
+		this.Status.Value = ConnectionStateEnum.Hosting;
 		this.EmitSignal(SignalName.ServerOpened);
 	}
 
@@ -150,13 +158,12 @@ public partial class NetworkManager : Node
     private void UpdateLocalPeer()
 	{
 		long id = this.Multiplayer.GetUniqueId();
+		if (this.LocalPeer != null && this.LocalPeer.Id != id) {
+			this._connectedPeers.Remove(this.LocalPeer.Id);
+		}
 		this.LocalPeer = this._connectedPeers[id] = new() {
 			Id = id,
-			CurrentScene = new(
-				this.GetTree().CurrentScene is Node node && node.IsInsideTree()
-					? node.GetPath()
-					: null
-			)
+			CurrentScene = new(this.GetTree()?.CurrentScene?.SceneFilePath ?? ""),
 		};
 	}
 
@@ -178,7 +185,7 @@ public partial class NetworkManager : Node
 	public void Disconnect()
 	{
 		switch (this.Status.Value) {
-			case ConnectionStateEnum.Host:
+			case ConnectionStateEnum.Hosting:
 				this.CloseMultiplayerServer();
 				break;
 			case ConnectionStateEnum.ClientConnected:

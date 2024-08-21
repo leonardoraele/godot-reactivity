@@ -41,7 +41,7 @@ public partial class UIDataBindingManager : Node
 	// INTERNAL TYPES
 	// -----------------------------------------------------------------------------------------------------------------
 
-	private record UIDataBinding(Node Owner, BindAttribute Attr, ReactiveVariant ReactiveVar) {
+	private record UIDataBinding(Node Owner, BindAttribute Attr, AbstractReactiveVariant ReactiveVar) {
 		public Node Target => this.Owner.GetNode(this.Attr.Path);
 	}
 
@@ -90,7 +90,7 @@ public partial class UIDataBindingManager : Node
 			.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
 			.Select(field =>
 				field.GetCustomAttribute<BindAttribute>() is BindAttribute attr
-					&& field.GetValue(node) is ReactiveVariant reactiveVar
+					&& field.GetValue(node) is AbstractReactiveVariant reactiveVar
 					? new UIDataBinding(node, attr, reactiveVar)
 					: null
 			)
@@ -100,7 +100,7 @@ public partial class UIDataBindingManager : Node
 			.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
 			.Select(prop =>
 				prop.GetCustomAttribute<BindAttribute>() is BindAttribute attr
-					&& prop.GetValue(node) is ReactiveVariant reactiveVar
+					&& prop.GetValue(node) is AbstractReactiveVariant reactiveVar
 					? new UIDataBinding(node, attr, reactiveVar)
 					: null
 			)

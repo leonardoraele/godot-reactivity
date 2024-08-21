@@ -2,12 +2,31 @@ using Godot;
 
 namespace Raele.GodotReactivity;
 
-public abstract class ReactiveVariant : Observable
+public class ReactiveVariant : AbstractReactiveVariant
 {
-	public abstract Variant VariantValue { get; set; }
+	protected Variant _value;
 
-	public static implicit operator Variant(ReactiveVariant reactiveVariant)
-		=> reactiveVariant.VariantValue;
+	public ReactiveVariant() => this._value = new Variant();
+	public ReactiveVariant(Variant value) => this._value = value;
 
-    public override string ToString() => this.VariantValue.ToString();
+	public override Variant VariantValue {
+		get => this.Value;
+		set => this.Value = value;
+	}
+
+    public Variant Value {
+		get {
+			this.NotifyUsed();
+			return this._value;
+		}
+		set {
+			if (this._value.Equals(value)) {
+				return;
+			}
+			this._value = value;
+			this.NotifyChanged();
+		}
+	}
+
+	public static implicit operator Variant(ReactiveVariant reactiveVariant) => reactiveVariant.Value;
 }

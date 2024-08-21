@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using Godot;
 
@@ -5,42 +6,59 @@ namespace Raele.GodotReactivity;
 
 public partial class SceneSynchronizationManager : Node
 {
-    // -----------------------------------------------------------------------------------------------------------------
-    // STATICS
-    // -----------------------------------------------------------------------------------------------------------------
+	// -----------------------------------------------------------------------------------------------------------------
+	// STATICS
+	// -----------------------------------------------------------------------------------------------------------------
 
-    // public static readonly string MyConstant = "";
+	// public static readonly string MyConstant = "";
 
-    // -----------------------------------------------------------------------------------------------------------------
-    // EXPORTS
-    // -----------------------------------------------------------------------------------------------------------------
+	// -----------------------------------------------------------------------------------------------------------------
+	// EXPORTS
+	// -----------------------------------------------------------------------------------------------------------------
 
-    // [Export] public
+	// [Export] public
 
-    // -----------------------------------------------------------------------------------------------------------------
-    // FIELDS
-    // -----------------------------------------------------------------------------------------------------------------
+	// -----------------------------------------------------------------------------------------------------------------
+	// FIELDS
+	// -----------------------------------------------------------------------------------------------------------------
 
-    public bool SynchronizationEnabled { get; private set; } = false;
-	public Node? SynchronizedScene = null;
-	private string? SynchronizedSceneFilePath = null;
+	// Because this class calls this.GetTree() so many times, we cache a reference to the SceneTree instead.
+	private SceneTree? TreeCache;
+
+	/// <summary>
+	/// This field determines whether the local peer is currently synchronizing scenes with the authority. If true, the
+	/// local peer will automatically change scene to the synchronized scene (i.e. the scene the authority peer is on)
+	/// whenever the authority changes the synchronized scene. If false, the local peer will still keep track of the
+	/// synchronized scene, but it will not automatically change to it. Call StartSynchronization() to enable scene
+	/// synchronization.
+	/// If the local peer changes scenes manually (e.g. by calling SceneTree.ChangeSceneToFile), scene synchronization
+	/// will be stopped automatically.
+	/// </summary>
+	public bool SynchronizationEnabled { get; private set; } = false;
+
+	/// <summary>
+	/// When scene synchronization starts (by calling StartSynchronization()), it is possible to configure a fallback
+	/// scene for when synchronization is interrupted. This field stores the path to the fallback scene. If scene
+	/// synchronization is ended by calling StopSynchronizationAndFallBack(), the local peer will change to this scene.
+	/// </summary>
+	private string? FallbackSceneFilePath;
+
+	// These two fields are always in sync with the authority so that the local peer can synchronize and desynchronize
+	// scenes with the authority (i.e. change to the same scene as the authority) whenever they want.
+	private string SynchronizedSceneFilePath = "";
 	private Variant[]? SynchronizedSceneArguments = [];
-    private string? FallbackSceneFilePath;
 
 	// -----------------------------------------------------------------------------------------------------------------
 	// PROPERTIES
 	// -----------------------------------------------------------------------------------------------------------------
 
-	public Node? CurrentScene => this.SynchronizationEnabled
-		? this.SynchronizedScene
-		: this.GetTree().CurrentScene;
+	// public
 
 	// -----------------------------------------------------------------------------------------------------------------
 	// SIGNALS
 	// -----------------------------------------------------------------------------------------------------------------
 
 	[Signal] public delegate void PeerChangedSceneEventHandler(ConnectedPeer peer);
-	// [Signal] public delegate void SceneSynchronizationFailureEventHandler(); // TODO
 
 	// -----------------------------------------------------------------------------------------------------------------
 	// INTERNAL TYPES
@@ -57,23 +75,25 @@ public partial class SceneSynchronizationManager : Node
 	public override void _EnterTree()
 	{
 		base._EnterTree();
+		this.TreeCache = this.GetTree();
 		this.Name = nameof(NetworkManager.Scenes);
-		this.SetupCurrentSceneObserver();
+		this.SetupSceneObservation();
 		NetworkManager.Connectivity.PeerConnected += this.OnPeerConnected;
 	}
 
 	public override void _ExitTree()
 	{
 		base._ExitTree();
+		this.TreeCache = null;
 		NetworkManager.Connectivity.PeerConnected -= this.OnPeerConnected;
 	}
 
-    // public override void _Ready()
-    // {
-    // 	base._Ready();
-    // }
+	// public override void _Ready()
+	// {
+	// 	base._Ready();
+	// }
 
-    public override void _Process(double delta)
+	public override void _Process(double delta)
 	{
 		base._Process(delta);
 		this.Multiplayer.Poll();
@@ -87,20 +107,11 @@ public partial class SceneSynchronizationManager : Node
 	// public override string[] _GetConfigurationWarnings()
 	// 	=> base._PhysicsProcess(delta);
 
-	// -----------------------------------------------------------------------------------------------------------------
-	// METHODS
-	// -----------------------------------------------------------------------------------------------------------------
-
 	private void OnPeerConnected(ConnectedPeer peer)
 	{
-		this.RpcId(peer.Id, MethodName.RpcNotifyPeerSceneChanged, this.CurrentScene?.GetPath() ?? new Variant());
+		this.NotifyPeerOfLocalScene(peer);
 		if (this.IsMultiplayerAuthority()) {
-			this.RpcId(
-				peer.Id,
-				MethodName.RpcChangeSynchronizedSceneToFile,
-				this.SynchronizedSceneFilePath ?? "",
-				new Godot.Collections.Array(this.SynchronizedSceneArguments ?? [])
-			);
+			this.NotifyPeerOfSynchronizedScene(peer);
 		}
 	}
 
@@ -108,25 +119,23 @@ public partial class SceneSynchronizationManager : Node
 	// SCENE OBSERVATION METHODS
 	// -----------------------------------------------------------------------------------------------------------------
 
-	private void SetupCurrentSceneObserver()
+	private void SetupSceneObservation()
 	{
-		ulong? lastSceneId = this.CurrentScene?.GetInstanceId();
-		this.GetTree().TreeChanged += () => {
-			ulong? currentSceneId = this.CurrentScene?.GetInstanceId();
+		ulong? lastSceneId = this.TreeCache?.CurrentScene?.GetInstanceId();
+		this.TreeCache!.TreeChanged += () => {
+			ulong? currentSceneId = this.TreeCache?.CurrentScene?.GetInstanceId();
 			if (/*currentSceneId.HasValue &&*/ currentSceneId != lastSceneId) {
 				lastSceneId = currentSceneId;
-				if (
-					NetworkManager.Instance.Status.Value == NetworkManager.ConnectionStateEnum.Host
-					|| NetworkManager.Instance.Status.Value == NetworkManager.ConnectionStateEnum.ClientConnected
-				) {
-					this.Rpc(MethodName.RpcNotifyPeerSceneChanged, this.CurrentScene?.GetPath() ?? new Variant());
-				}
+				this.Rpc(MethodName.RpcNotifyPeerChangedScene, this.TreeCache?.CurrentScene?.SceneFilePath ?? "");
 			}
 		};
 	}
 
+	private void NotifyPeerOfLocalScene(ConnectedPeer peer)
+		=> this.RpcId(peer.Id, MethodName.RpcNotifyPeerChangedScene, this.TreeCache?.CurrentScene?.SceneFilePath ?? "");
+
 	[Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = true)]
-	private void RpcNotifyPeerSceneChanged(NodePath scenePath)
+	private void RpcNotifyPeerChangedScene(string sceneFilePath)
 	{
 		if (!NetworkManager.Instance.ConnectedPeers.TryGetValue(this.Multiplayer.GetRemoteSenderId(), out ConnectedPeer? peer)) {
 			GD.PushError(
@@ -136,10 +145,8 @@ public partial class SceneSynchronizationManager : Node
 			);
 			return;
 		}
-		string? scenePathStr = scenePath.IsEmpty ? null : scenePath;
-		string fromScene = peer.CurrentScene.Value?.IsEmpty != false ? "null" : peer.CurrentScene.Value;
-		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), $"Peer #{peer.Id} changed scenes.", fromScene, "->", scenePathStr ?? "null");
-		peer.CurrentScene.Value = scenePathStr == null ? null : new NodePath(scenePathStr);
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), $"Peer #{peer.Id} changed scene: '{peer.CurrentScene.Value}' -> '{sceneFilePath}'");
+		peer.CurrentScene.Value = sceneFilePath;
 		this.EmitSignal(SignalName.PeerChangedScene, peer);
 	}
 
@@ -164,7 +171,7 @@ public partial class SceneSynchronizationManager : Node
 	/// is useful if you want the synchronized scene to take place inside of the normal scene (e.g. in a viewport) or
 	/// outside of it (e.g. side by side with the normal current scene in the scene tree).
 	/// // TODO (alt name: `parallelScene`)
-	/// If `setCurrentScene` is false, SceneManager won't free or change this.GetTree().CurrentScene when changing the
+	/// If `setCurrentScene` is false, SceneManager won't free or change this.TreeCache?.CurrentScene when changing the
 	/// synchronized scene. In this case, changing the scene via SceneTree.ChangeSceneToFile won't cause synchronization
 	/// to end. This is useful if you want the authority to be able to change to another scene without ending scene
 	/// synchronization. (i.e. without stopping connected peers from synchronizing states in with each other)
@@ -175,117 +182,170 @@ public partial class SceneSynchronizationManager : Node
 	{
 		this.FallbackSceneFilePath = fallbackSceneFilePath;
 		this.SynchronizationEnabled = true;
-		this.SynchronizedScene = this.GetTree().CurrentScene;
-		this.GetTree().TreeChanged += this.CheckSceneChanged;
+		this.PeerChangedScene += this.OnPeerChangedScene;
 		this.ChangeToSynchronizedScene();
 	}
 
-	private void CheckSceneChanged()
+	private void OnPeerChangedScene(ConnectedPeer peer)
 	{
-		if (this.GetTree().CurrentScene != this.SynchronizedScene) {
-			Callable.From(() => {
-				if (this.SynchronizationEnabled && this.GetTree().CurrentScene != this.SynchronizedScene) {
-					this.StopSynchronization();
-				}
-			}).CallDeferred();
+		if (
+			peer.IsLocalPeer
+			&& this.SynchronizationEnabled
+			&& this.SynchronizedSceneFilePath != this.TreeCache?.CurrentScene?.SceneFilePath
+		) {
+			this.StopSynchronization();
 		}
 	}
 
-	public void StopSynchronizationAndFallBack(string? fallbackSceneFilePath = null)
+	/// <summary>
+	/// Stops scene synchronization and changes the current scene to the fallback scene. If no fallback scene is set,
+	/// the current scene will not change.
+	/// </summary>
+	public void StopSynchronizationAndFallBack()
 	{
+		if (!this.SynchronizationEnabled) {
+			return;
+		}
+		string? fallbackSceneFilePath = this.FallbackSceneFilePath;
 		this.StopSynchronization();
-		fallbackSceneFilePath ??= this.FallbackSceneFilePath;
-		if (fallbackSceneFilePath != null) {
-			this.GetTree().ChangeSceneToFile(fallbackSceneFilePath);
-			this.FallbackSceneFilePath = null;
+		if (!string.IsNullOrEmpty(fallbackSceneFilePath)) {
+			this.TreeCache?.ChangeSceneToFile(this.FallbackSceneFilePath);
 		}
 	}
 
+	/// <summary>
+	/// Stops scene synchronization without changing the current scene. The local peer will still keep track of the
+	/// synchronized scene set by the authority, but it will not automatically change to it. Call StartSynchronization()
+	/// to enable scene synchronization again.
+	/// This method is called automatically if the local peer changes scenes manually (e.g. by calling
+	/// SceneTree.ChangeSceneToFile()).
+	/// </summary>
 	public void StopSynchronization()
 	{
 		if (!this.SynchronizationEnabled) {
 			return;
 		}
 		this.SynchronizationEnabled = false;
-		this.SynchronizedScene = null;
-		this.SynchronizedSceneArguments = [];
-		this.GetTree().TreeChanged -= this.CheckSceneChanged;
+		this.FallbackSceneFilePath = null;
 	}
 
 	private async void ChangeToSynchronizedScene()
 	{
-		string? filePath = this.SynchronizedSceneFilePath;
+		string sceneFilePath = this.SynchronizedSceneFilePath;
 		await this.RemoveAndFreeCurrentScene();
-		if (this.GetTree().CurrentScene != null || filePath != this.SynchronizedSceneFilePath) {
+
+		// Check if all conditions to change scene are still valid. (either might have changed while waiting)
+		if (
+			this.TreeCache == null
+			|| this.TreeCache.CurrentScene != null
+			|| sceneFilePath != this.SynchronizedSceneFilePath
+		) {
 			return;
 		}
-		if (this.SynchronizedSceneFilePath == null) {
-			GD.PushWarning(
-				NetworkManager.NetId,
-				nameof(SceneSynchronizationManager),
-				"Cannot change to synchronized scene because no scene file path is set."
-			);
+
+		// If the synchronized scene is empty, then there's nothing more to do.
+		if (string.IsNullOrWhiteSpace(this.SynchronizedSceneFilePath)) {
 			return;
 		}
-		this.SynchronizedScene = GD.Load<PackedScene>(this.SynchronizedSceneFilePath)?.Instantiate();
-		if (this.SynchronizedScene == null) {
+
+		// Load scene and add it to the tree
+		Node? enteringScene = GD.Load<PackedScene>(this.SynchronizedSceneFilePath)?.Instantiate();
+		if (enteringScene == null) {
 			GD.PushError(
 				NetworkManager.NetId,
 				nameof(SceneSynchronizationManager),
-				"Failed to load scene from file.",
-				"Scene: ", this.SynchronizedSceneFilePath
+				"Failed to change to synchronized scene.",
+				"Cause: Failed to load scene from file.",
+				"SceneFilePath: ", this.SynchronizedSceneFilePath
 			);
 			return;
 		}
-		this.GetTree().Root.AddChild(this.SynchronizedScene);
-		this.GetTree().CurrentScene = this.SynchronizedScene;
-		if (this.SynchronizedScene.HasMethod("_NetworkReady")) {
-			this.SynchronizedScene.Call("_NetworkReady", this.SynchronizedSceneArguments);
+		try {
+			if (enteringScene.HasMethod("_before_enter_tree")) {
+				enteringScene.Call("_before_enter_tree", this.SynchronizedSceneArguments);
+			} else if (enteringScene.HasMethod("_BeforeEnterTree")) {
+				enteringScene.Call("_BeforeEnterTree", this.SynchronizedSceneArguments);
+			}
+		} catch (Exception e) {
+			GD.PushError(
+				NetworkManager.NetId,
+				nameof(SceneSynchronizationManager),
+				"Failed to change to synchronized scene.",
+				"Cause: Scene threw an exception on _before_enter_tree or _BeforeEnterTree.",
+				"SceneFilePath: ", this.SynchronizedSceneFilePath,
+				"Exception: ", e
+			);
+			return;
 		}
+		this.TreeCache.Root.AddChild(enteringScene);
+		this.TreeCache.CurrentScene = enteringScene;
 	}
 
 	public async Task RemoveAndFreeCurrentScene()
 	{
-		if (this.SynchronizedScene == null) {
+		if (this.TreeCache?.CurrentScene == null) {
 			return;
 		}
-		Node synchronizedScene = this.SynchronizedScene;
-		this.SynchronizedScene = null;
-		this.GetTree().CurrentScene = null;
-		synchronizedScene.GetParent()?.RemoveChild(synchronizedScene);
+
+		// Remove current scene
+		Node exitingScene = this.TreeCache.CurrentScene;
+		exitingScene.GetParent()?.RemoveChild(exitingScene);
+		this.TreeCache.CurrentScene = null;
+
+		// Wait for the end of the frame then free the scene
 		TaskCompletionSource source = new();
 		Callable.From(() => {
-			synchronizedScene.Free();
+			exitingScene.Free();
 			source.SetResult();
 		}).CallDeferred();
 		await source.Task;
+
+		// Alternative implementation for freeing the scene:
+		// TaskCompletionSource source = new();
+		// void CheckSceneIsStillValid() {
+		// 	if (!exitingScene.IsInstanceValid()) {
+		// 		source.SetResult();
+		// 	}
+		// }
+		// this.TreeCache.ProcessFrame += CheckSceneIsStillValid;
+		// exitingScene.QueueFree();
+		// await source.Task;
+		// this.TreeCache.ProcessFrame -= CheckSceneIsStillValid;
 	}
+
+	private void NotifyPeerOfSynchronizedScene(ConnectedPeer peer)
+		=> this.RpcId(
+			peer.Id,
+			MethodName.RpcChangeSynchronizedScene,
+			this.SynchronizedSceneFilePath,
+			new Godot.Collections.Array(this.SynchronizedSceneArguments ?? [])
+		);
 
 	/// <summary>
 	/// Change the scene of all peers with synchronized scene enabled (including local peer) to the scene at the given
 	/// path. If the local peer is not synchronizing scenes, this method will still change the synchronized scene of
 	/// other peers, but the local peer will only go to the new scene if it starts scene synchronization.
 	/// </summary>
-	public void ChangeSynchronizedSceneToFile(string scenePath, params Variant[] arguments)
+	public void ChangeSynchronizedScene(string sceneFilePath, params Variant[] arguments)
 	{
 		if (!this.IsMultiplayerAuthority()) {
 			GD.PushError(
 				NetworkManager.NetId,
 				nameof(SceneSynchronizationManager),
 				"Only the authority can change scenes.",
-				"Scene: ", scenePath
+				"Scene: ", sceneFilePath
 			);
 			return;
 		}
-		this.Rpc(MethodName.RpcChangeSynchronizedSceneToFile, scenePath, new Godot.Collections.Array(arguments));
+		this.Rpc(MethodName.RpcChangeSynchronizedScene, sceneFilePath, new Godot.Collections.Array(arguments));
 	}
 
 	[Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = true)]
-	private void RpcChangeSynchronizedSceneToFile(string scenePath, Godot.Collections.Array<Variant> args)
+	private void RpcChangeSynchronizedScene(string sceneFilePath, Godot.Collections.Array args)
 	{
-		this.SynchronizedSceneFilePath = string.IsNullOrEmpty(scenePath) ? null : scenePath;
+		this.SynchronizedSceneFilePath = sceneFilePath;
 		this.SynchronizedSceneArguments = [..args];
-		GD.PrintS(NetworkManager.NetId, nameof(SceneSynchronizationManager), "Synchronized scene changed to:", scenePath, "with args:", args);
+		GD.PrintS(NetworkManager.NetId, nameof(SceneSynchronizationManager), "Synchronized scene changed to:", $"'{sceneFilePath}'", "with args:", args);
 		if (this.SynchronizationEnabled) {
 			this.ChangeToSynchronizedScene();
 		}

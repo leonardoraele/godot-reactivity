@@ -34,16 +34,28 @@ public partial class NetworkSynchronizer : Node
 	// EXPORTS
 	// -----------------------------------------------------------------------------------------------------------------
 
-	// [Export] public
+	/// <summary>
+	/// A list of field names to synchronize, separated by comma. This NetworkSynchronizer will synchronize these fields
+	/// in addition to the fields marked with the [Synchronized] attribute.
+	/// Each entry of this list can be a direct property of the synchronized node (i.e. the parent of this node) or a
+	/// property path to a nested field, using NodePath notation. For example, ":position:x" will synchronize only the X
+	/// component of the synchronized node's `position` property.
+	/// </summary>
+	[Export] public string SynchronizedFields = "";
+
+	// TODO implement these
+	// [Export] public int RefreshRate = 1;
+	// [Export] private RefreshRateEnum RefreshRateMode = RefreshRateEnum.Frames;
 
 	// -----------------------------------------------------------------------------------------------------------------
 	// FIELDS
 	// -----------------------------------------------------------------------------------------------------------------
 
-	private List<ReactiveVariant> SynchronizedVariables = new();
+	private List<AbstractReactiveVariant> SynchronizedVariables = new();
 	private uint DirtyFlag = 0;
 	private bool InOfflineMode = false;
 	private Node ParentCache = null!;
+	private (string fieldName, ReactiveVariant reactiveVar)[] NonAnnotedSynchronizedVariables = [];
 
 	// -----------------------------------------------------------------------------------------------------------------
 	// PROPERTIES
@@ -60,6 +72,11 @@ public partial class NetworkSynchronizer : Node
 	// INTERNAL TYPES
 	// -----------------------------------------------------------------------------------------------------------------
 
+	private enum RefreshRateEnum {
+		Frames,
+		PhysicsFrames,
+		Seconds,
+	}
 
 	// -----------------------------------------------------------------------------------------------------------------
 	// EVENTS
@@ -89,6 +106,7 @@ public partial class NetworkSynchronizer : Node
 	{
 		base._Process(delta);
 		this.Multiplayer.Poll();
+		this.UpdateNonAnnotedSynchronizedVariables();
 	}
 
 	// public override void _PhysicsProcess(double delta)
@@ -105,12 +123,18 @@ public partial class NetworkSynchronizer : Node
 
     private void FindAndRegisterParentVariables()
     {
+		this.NonAnnotedSynchronizedVariables = this.SynchronizedFields.Split(',')
+			.Where(fieldName => !string.IsNullOrWhiteSpace(fieldName))
+			.Select(fieldName => (fieldName, new ReactiveVariant(this.ParentCache.GetIndexed(fieldName))))
+			.ToArray();
+		this.NonAnnotedSynchronizedVariables.Select(tuple => tuple.reactiveVar)
+			.ForEach(this.RegisterVariable);
 		this.ParentCache.GetType()
 			.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
 			.Where(field => field.GetCustomAttribute(typeof(SynchronizedAttribute)) != null)
 			.Select(field => {
-				if (field.GetValue(this.ParentCache) is not ReactiveVariant state) {
-					GD.PushError($"[{nameof(NetworkSynchronizer)}] Failed to synchronize field {field.Name}. Cause: Field is not of type {nameof(ReactiveVariant)}.");
+				if (field.GetValue(this.ParentCache) is not AbstractReactiveVariant state) {
+					GD.PushError($"[{nameof(NetworkSynchronizer)}] Failed to synchronize field {field.Name}. Cause: Field is not of type {nameof(AbstractReactiveVariant)}.");
 					return null;
 				}
 				return state;
@@ -121,8 +145,8 @@ public partial class NetworkSynchronizer : Node
 			.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
 			.Where(prop => prop.GetCustomAttribute(typeof(SynchronizedAttribute)) != null)
 			.Select(prop => {
-				if (prop.GetValue(this.ParentCache) is not ReactiveVariant state) {
-					GD.PushError($"[{nameof(NetworkSynchronizer)}] Failed to synchronize property {prop.Name}. Cause: Property is not of type {nameof(ReactiveVariant)}.");
+				if (prop.GetValue(this.ParentCache) is not AbstractReactiveVariant state) {
+					GD.PushError($"[{nameof(NetworkSynchronizer)}] Failed to synchronize property {prop.Name}. Cause: Property is not of type {nameof(AbstractReactiveVariant)}.");
 					return null;
 				}
 				return state;
@@ -131,7 +155,7 @@ public partial class NetworkSynchronizer : Node
 			.ForEach(this.RegisterVariable);
     }
 
-	private void RegisterVariable(ReactiveVariant state)
+	private void RegisterVariable(AbstractReactiveVariant state)
 	{
 		int stateIndex = this.SynchronizedVariables.Count;
 		state.Changed += () => {
@@ -142,12 +166,19 @@ public partial class NetworkSynchronizer : Node
 		this.SynchronizedVariables.Add(state);
 	}
 
+	private void UpdateNonAnnotedSynchronizedVariables()
+	{
+		foreach ((string fieldName, ReactiveVariant reactiveVar) in this.NonAnnotedSynchronizedVariables) {
+			reactiveVar.Value = this.ParentCache.GetIndexed(fieldName);
+		}
+	}
+
 	private void OnPeerChangedScene(ConnectedPeer peer)
 	{
 		if (
 			!peer.IsLocalPeer
 			&& this.IsMultiplayerAuthority()
-			&& NetworkManager.Instance.LocalPeer?.IsInSameScene(peer) == true
+			&& peer.CurrentScene.Value != NetworkManager.Instance.LocalPeer.CurrentScene.Value
 			// Spawned nodes can't be synchronized at scene-change time because they are not in the scene tree yet. They
 			// will be synchronized when they are spawned. (user should call Update() manually at _NetworkSpawned())
 			&& !this.ParentCache.IsInGroup(NetworkManager.SPAWNED_GROUP)
@@ -185,7 +216,7 @@ public partial class NetworkSynchronizer : Node
 			if (this.IsMultiplayerAuthority()) {
 				NetworkManager.RpcUtil.RpcOtherPeersInScene(this, MethodName.RpcSetValues, this.DirtyFlag, newValues);
 			} else {
-				NetworkManager.RpcUtil.RpcAuthorityInScene(this, MethodName.RpcSetValues, this.DirtyFlag, newValues);
+				NetworkManager.RpcUtil.RpcAuthoritySafe(this, MethodName.RpcSetValues, this.DirtyFlag, newValues);
 			}
 		}
 		this.DirtyFlag = 0;

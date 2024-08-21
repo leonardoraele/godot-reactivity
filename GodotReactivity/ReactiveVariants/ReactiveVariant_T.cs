@@ -2,7 +2,7 @@ using Godot;
 
 namespace Raele.GodotReactivity;
 
-public class ReactiveVariant<[MustBeVariant] T> : ReactiveVariant
+public class ReactiveVariant<[MustBeVariant] T> : AbstractReactiveVariant
 {
 	protected T _value;
 
