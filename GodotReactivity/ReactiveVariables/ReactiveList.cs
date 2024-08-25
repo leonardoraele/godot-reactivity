@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 
 namespace Raele.GodotReactivity;
 
@@ -23,6 +24,9 @@ public class ReactiveList<T> : Observable<Collection<T>>, ICollection<T>, IReadO
 	{
 		this._collection.CollectionChanged += (_sender, _args) => this.NotifyChanged();
 	}
+
+    public ReactiveList(Collection<T> initialValue) : this() => this.Value = initialValue;
+    public ReactiveList(IEnumerable<T> initialValue) : this(new(initialValue.ToList())) {}
 
     public static implicit operator Collection<T>(ReactiveList<T> list) => new(list);
 

@@ -26,6 +26,8 @@ public class EffectContext : Observable
 	public bool Dirty { get; private set; } = false;
 	private HashSet<Observable> Dependencies = new();
 
+	public bool Empty => this.Dependencies.Count == 0;
+
 	public override void NotifyChanged()
 	{
 		base.NotifyChanged();
@@ -42,17 +44,15 @@ public class EffectContext : Observable
 
 	public void Run(Action action)
 	{
-		Stack<EffectContext> stack = ContextByThread.TryGetValue(Thread.CurrentThread, out Stack<EffectContext>? existingStack)
-			? existingStack
-			: new();
-		ContextByThread.TryAdd(Thread.CurrentThread, stack);
+		Stack<EffectContext> stack = EffectContext.ContextByThread.GetValueOrDefault(Thread.CurrentThread) ?? new();
+		EffectContext.ContextByThread.TryAdd(Thread.CurrentThread, stack);
 		stack.Push(this);
 		try {
 			action();
 		} catch {
 			stack.Pop();
 			if (stack.Count == 0) {
-				ContextByThread.Remove(Thread.CurrentThread);
+				EffectContext.ContextByThread.Remove(Thread.CurrentThread);
 			}
 			throw;
 		}

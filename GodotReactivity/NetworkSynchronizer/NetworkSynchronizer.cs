@@ -214,9 +214,9 @@ public partial class NetworkSynchronizer : Node
 		);
 		if (newValues.Count != 0) {
 			if (this.IsMultiplayerAuthority()) {
-				NetworkManager.RpcUtil.RpcOtherPeersInScene(this, MethodName.RpcSetValues, this.DirtyFlag, newValues);
+				NetworkManager.RpcUtil.SafeRpcToOthers(this, MethodName.RpcSetValues, this.DirtyFlag, newValues);
 			} else {
-				NetworkManager.RpcUtil.RpcAuthoritySafe(this, MethodName.RpcSetValues, this.DirtyFlag, newValues);
+				NetworkManager.RpcUtil.SafeRpcToAuthority(this, MethodName.RpcSetValues, this.DirtyFlag, newValues);
 			}
 		}
 		this.DirtyFlag = 0;

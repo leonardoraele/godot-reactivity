@@ -35,7 +35,6 @@ public partial class RpcUtilityManager : Node
 	// -----------------------------------------------------------------------------------------------------------------
 
 
-
 	// -----------------------------------------------------------------------------------------------------------------
 	// SIGNALS
 	// -----------------------------------------------------------------------------------------------------------------
@@ -54,10 +53,11 @@ public partial class RpcUtilityManager : Node
 	// EVENTS
 	// -----------------------------------------------------------------------------------------------------------------
 
-	// public override void _EnterTree()
-	// {
-	// 	base._EnterTree();
-	// }
+	public override void _EnterTree()
+	{
+		base._EnterTree();
+		this.Name = nameof(NetworkManager.RpcUtil);
+	}
 
 	// public override void _Ready()
 	// {
@@ -76,6 +76,17 @@ public partial class RpcUtilityManager : Node
 
 	// public override string[] _GetConfigurationWarnings()
 	// 	=> base._PhysicsProcess(delta);
+
+	// -----------------------------------------------------------------------------------------------------------------
+	// UTILITY METHODS
+	// -----------------------------------------------------------------------------------------------------------------
+
+    public void ValidateRpcReceiverIsAuthorityOfNode(Node? node = null)
+    {
+		if (!(node ?? this).IsMultiplayerAuthority()) {
+			throw new Exception("Only the authority can call this method.");
+		}
+    }
 
 	// -----------------------------------------------------------------------------------------------------------------
 	// BI-DIRECTIONAL RPC METHODS
@@ -131,14 +142,14 @@ public partial class RpcUtilityManager : Node
 	// SAFE-RPC METHODS
 	// -----------------------------------------------------------------------------------------------------------------
 
-	public void RpcAllPeersInScene(Node target, StringName methodName, params Variant[] args)
+	public void SafeRpcToEveryone(Node target, StringName methodName, params Variant[] args)
 	{
 		NetworkManager.Connectivity.ConnectedPeers.Values
 			.Where(peer => NetworkManager.Connectivity.LocalPeer.CurrentScene.Value == peer.CurrentScene)
 			.ForEach(peer => target.RpcId(peer.Id, methodName, args));
 	}
 
-	public void RpcOtherPeersInScene(Node target, StringName methodName, params Variant[] args)
+	public void SafeRpcToOthers(Node target, StringName methodName, params Variant[] args)
 	{
 		NetworkManager.Connectivity.ConnectedPeers.Values
 			.Where(peer => peer != NetworkManager.Connectivity.LocalPeer)
@@ -146,7 +157,7 @@ public partial class RpcUtilityManager : Node
 			.ForEach(peer => target.RpcId(peer.Id, methodName, args));
 	}
 
-	public void RpcAuthoritySafe(Node target, StringName methodName, params Variant[] args)
+	public void SafeRpcToAuthority(Node target, StringName methodName, params Variant[] args)
 	{
 		if (
 			!NetworkManager.Connectivity.ConnectedPeers.TryGetValue(target.GetMultiplayerAuthority(), out ConnectedPeer? authority)

@@ -1,4 +1,5 @@
 using System;
+using System.Reactive.Disposables;
 using System.Threading;
 using Godot;
 
@@ -68,6 +69,9 @@ public class ReactiveEffect : IDisposable
 			}
 		};
 		this._context.Run(this._effectAction);
+		if (this._context.Empty) {
+			this.Dispose();
+		}
 	}
 
 	public void Dispose()
@@ -80,13 +84,6 @@ public class ReactiveEffect : IDisposable
 	public IDisposable DisabledContext()
 	{
 		this.Enabled = false;
-		return new EffectDisableContext(() => this.Enabled = true);
-	}
-
-    public class EffectDisableContext : IDisposable
-	{
-        private Action OnDisposed;
-		public EffectDisableContext(Action onDisposed) => this.OnDisposed = onDisposed;
-		public void Dispose() => this.OnDisposed();
+		return Disposable.Create(() => this.Enabled = true);
 	}
 }
