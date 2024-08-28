@@ -173,15 +173,15 @@ public partial class NetworkSynchronizer : Node
 		}
 	}
 
-	private void OnPeerChangedScene(ConnectedPeer peer)
+	private void OnPeerChangedScene(ConnectedPeer peer, string previousScene)
 	{
 		if (
 			!peer.IsLocalPeer
 			&& this.IsMultiplayerAuthority()
-			&& peer.CurrentScene.Value != NetworkManager.Instance.LocalPeer.CurrentScene.Value
+			&& peer.CurrentScene.Value == NetworkManager.Instance.LocalPeer.CurrentScene.Value
 			// Spawned nodes can't be synchronized at scene-change time because they are not in the scene tree yet. They
 			// will be synchronized when they are spawned. (user should call Update() manually at _NetworkSpawned())
-			&& !this.ParentCache.IsInGroup(NetworkManager.SPAWNED_GROUP)
+			&& !NetworkManager.Spawner.CheckIsNetworkSpawned(this.ParentCache)
 		) {
 			this.RpcId(peer.Id, MethodName.RpcSetValues, uint.MaxValue, this.GetLocalValues(uint.MaxValue));
 		}

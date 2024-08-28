@@ -63,7 +63,7 @@ public partial class SceneSynchronizationManager : Node
 	// SIGNALS
 	// -----------------------------------------------------------------------------------------------------------------
 
-	[Signal] public delegate void PeerChangedSceneEventHandler(ConnectedPeer peer);
+	[Signal] public delegate void PeerChangedSceneEventHandler(ConnectedPeer peer, string previousScene);
 
 	// -----------------------------------------------------------------------------------------------------------------
 	// INTERNAL TYPES
@@ -124,17 +124,20 @@ public partial class SceneSynchronizationManager : Node
 	// SCENE OBSERVATION METHODS
 	// -----------------------------------------------------------------------------------------------------------------
 
-	private void SetupSceneObservation()
+	private void SetupSceneObservation() => this.TreeCache!.TreeChanged += this.CheckSceneChanged;
+
+	private void CheckSceneChanged()
 	{
-		ulong? lastSceneId = this.TreeCache?.CurrentScene?.GetInstanceId();
-		this.TreeCache!.TreeChanged += () => {
-			ulong? currentSceneId = this.TreeCache?.CurrentScene?.GetInstanceId();
-			if (/*currentSceneId.HasValue &&*/ currentSceneId != lastSceneId) {
-				lastSceneId = currentSceneId;
-				this.Rpc(MethodName.RpcNotifyPeerChangedScene, this.TreeCache?.CurrentScene?.SceneFilePath ?? "");
-			}
-		};
+		if (
+			NetworkManager.Connectivity.LocalPeer.CurrentScene.Value
+			!= (this.TreeCache?.CurrentScene?.SceneFilePath ?? "")
+		) {
+			this.NotifySceneChanged();
+		}
 	}
+
+	private void NotifySceneChanged()
+		=> this.Rpc(MethodName.RpcNotifyPeerChangedScene, this.TreeCache?.CurrentScene?.SceneFilePath ?? "");
 
 	private void NotifyPeerOfLocalScene(ConnectedPeer peer)
 		=> this.RpcId(peer.Id, MethodName.RpcNotifyPeerChangedScene, this.TreeCache?.CurrentScene?.SceneFilePath ?? "");
@@ -151,8 +154,9 @@ public partial class SceneSynchronizationManager : Node
 			return;
 		}
 		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), $"Peer #{peer.Id} changed scene: '{peer.CurrentScene.Value}' -> '{sceneFilePath}'");
+		string previousScene = peer.CurrentScene.Value;
 		peer.CurrentScene.Value = sceneFilePath;
-		this.EmitSignal(SignalName.PeerChangedScene, peer);
+		this.EmitSignal(SignalName.PeerChangedScene, peer, previousScene);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------
@@ -191,7 +195,7 @@ public partial class SceneSynchronizationManager : Node
 		this.ChangeToSynchronizedScene();
 	}
 
-	private void OnPeerChangedScene(ConnectedPeer peer)
+	private void OnPeerChangedScene(ConnectedPeer peer, string previousScene)
 	{
 		if (
 			!this.ChangingToSynchronizedScene
@@ -252,6 +256,7 @@ public partial class SceneSynchronizationManager : Node
 			return;
 		}
 
+		// Exit current scene
 		{
 			string sceneFilePath = this.SynchronizedSceneFilePath;
 			await this.RemoveAndFreeCurrentScene();
@@ -271,7 +276,7 @@ public partial class SceneSynchronizationManager : Node
 			return;
 		}
 
-		// Load scene and add it to the tree
+		// Load next scene and add it to the tree
 		Node? enteringScene = GD.Load<PackedScene>(this.SynchronizedSceneFilePath)?.Instantiate();
 		if (enteringScene == null) {
 			GD.PushError(
@@ -302,6 +307,13 @@ public partial class SceneSynchronizationManager : Node
 		}
 		this.TreeCache.Root.AddChild(enteringScene);
 		this.TreeCache.CurrentScene = enteringScene;
+		// Because of [this issue](https://github.com/godotengine/godot/issues/96195), we must manually call for
+		// CheckSceneChanged(), since it is normally only called when the tree changes, but the issue prevents us from
+		// updating the current scene before that. This also means that, until the issue is fixed, we can't have
+		// SceneTree.CurrentScene point to the new scene at _EnterTree() and _Ready(), which means that any code that
+		// relies on the current scene (e.g. spawning network nodes) must be deferred to the end of the frame.
+		// FIXME // TODO Check if the issue has already been fixed and update this code accordingly.
+		this.CheckSceneChanged();
 	}
 
 	public async Task RemoveAndFreeCurrentScene()

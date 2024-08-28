@@ -56,7 +56,7 @@ public partial class NetworkManager : Node
 		}
 		public Godot.Collections.Array Args { get; init; } = new();
 		public NetworkSynchronizer? Synchronizer;
-        public string? AncestorSpawnNetId;
+        public SpawnedNodeRecord? AncestorSpawnNetId;
 
         public List<string> DescendantSpawnNetIds { get; private set; } = new();
     }
@@ -155,6 +155,7 @@ public partial class NetworkManager : Node
 				}
 			}
 		} catch (Exception e) {
+			this.UnregisterSpawnedNode(this.SpawnedNodes[instance.Name]);
 			GD.PushError(
 				NetworkManager.NetId,
 				nameof(NetworkManager),
@@ -187,7 +188,7 @@ public partial class NetworkManager : Node
 			node.GetAncestors().FirstOrDefault(ancestor => ancestor.IsInGroup(SPAWNED_GROUP)) is Node ancestor
 			&& this.SpawnedNodes.TryGetValue(ancestor.Name, out SpawnedNodeRecord? ancestorRecord)
 		) {
-			record.AncestorSpawnNetId = ancestorRecord.Node.Name;
+			record.AncestorSpawnNetId = ancestorRecord;
 			ancestorRecord.DescendantSpawnNetIds.Add(node.Name);
 		}
 	}
@@ -241,16 +242,16 @@ public partial class NetworkManager : Node
 			));
 	}
 
-	private void OnPeerChangedScene(ConnectedPeer peer)
+	private void OnPeerChangedScene(ConnectedPeer peer, string previousScene)
 	{
 		if (peer == this.LocalPeer) {
 			this.SpawnedNodes.Clear();
-		} else if (peer.CurrentScene.Value != NetworkManager.Connectivity.LocalPeer.CurrentScene.Value) {
-            IEnumerable<SpawnedNodeRecord> spawnRecords = this.SpawnedNodes.Values
+		} else if (peer.CurrentScene.Value == NetworkManager.Connectivity.LocalPeer.CurrentScene.Value) {
+            IEnumerable<SpawnedNodeRecord> topLevelSpawnRecords = this.SpawnedNodes.Values
 				.Where(record => record.Node.IsMultiplayerAuthority())
 				.Where(record => record.AncestorSpawnNetId == null);
-			GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), $"Detected new peer in current scene. Spawning {spawnRecords.Count()} nodes...", new { Scene = this.LocalPeer?.CurrentScene.Value ?? "null", PeerId = peer.Id });
-			spawnRecords.ForEach(record =>
+			GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), $"Detected new peer in current scene. Spawning {topLevelSpawnRecords.Count()} nodes...", new { Scene = this.LocalPeer?.CurrentScene.Value ?? "null", PeerId = peer.Id });
+			topLevelSpawnRecords.ForEach(record =>
 				this.RpcId(
 					peer.Id,
 					MethodName.RpcSpawn,
@@ -290,6 +291,5 @@ public partial class NetworkManager : Node
 		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Despawned a network node.", new { Path = record.Node.GetPath() });
 	}
 
-	public bool IsNetworkSpawned(Node node)
-		=> node.IsInGroup(SPAWNED_GROUP);
+	public bool CheckIsNetworkSpawned(Node node) => node.IsInGroup(SPAWNED_GROUP);
 }

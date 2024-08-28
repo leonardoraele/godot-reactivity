@@ -26,6 +26,9 @@ public class ReactiveChildrenList<T>
 
 	~ReactiveChildrenList()
 	{
+		if (!this._parent.IsInstanceValid()) {
+			return;
+		}
 		this._parent.ChildEnteredTree -= this.OnChildrenListChanged;
 		this._parent.ChildExitingTree -= this.OnChildrenListChanged;
 		this._parent.ChildOrderChanged -= this.NotifyChanged;
