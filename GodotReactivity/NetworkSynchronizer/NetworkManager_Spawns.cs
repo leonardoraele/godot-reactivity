@@ -116,6 +116,9 @@ public partial class NetworkManager : Node
 			return;
 		}
 		byte[] netIdBytes = Guid.NewGuid().ToByteArray();
+		// TODO I think we should also send NetworkManager.Connectivity.LocalPeer.CurrentScene.Value.GetHashCode() in
+		// this Rpc as a type of checksum so that the receiver peer can be sure that the intention was to spawn in the
+		// correct scene. -- What kind of issues would this prevent, exactly?
 		this.Rpc(MethodName.RpcSpawn, scenePath, parent.GetPath(), netIdBytes, new Godot.Collections.Array(args));
 	}
 
@@ -173,7 +176,7 @@ public partial class NetworkManager : Node
 			// this.SpawnedNodes[instance.Name].Synchronizer?.Update();
 			this.RpcId(instance.GetMultiplayerAuthority(), MethodName.RpcSpawnDescendants, netIdBytes);
 		}
-		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Network-spawned scene", sceneFilePath, "as", instance.Name);
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "🎉 Network-spawned scene", sceneFilePath, "as", instance.Name);
 	}
 
 	private void RegisterSpawnedNode(Node node, string sceneFilePath, Godot.Collections.Array args)
@@ -288,7 +291,7 @@ public partial class NetworkManager : Node
 		}
 		record.Node.QueueFree();
 		this.UnregisterSpawnedNode(record);
-		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Despawned a network node.", new { Path = record.Node.GetPath() });
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "❌ Despawned a network node.", new { Path = record.Node.GetPath() });
 	}
 
 	public bool CheckIsNetworkSpawned(Node node) => node.IsInGroup(SPAWNED_GROUP);

@@ -118,7 +118,7 @@ public partial class NetworkManager : Node
 		this.Multiplayer.PeerConnected += this.OnPeerConnected;
 		this.Multiplayer.PeerDisconnected += this.OnPeerDisconnected;
 		this.UpdateLocalPeer();
-		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Server started.");
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "🌐 Server started.");
 		GD.PushWarning(nameof(this.OpenMultiplayerServer));
 		this.Status.Value = ConnectionStateEnum.Hosting;
 		this.EmitSignal(SignalName.ServerOpened);
@@ -127,7 +127,7 @@ public partial class NetworkManager : Node
 	public async Task ConnectToServer(string connectAddress)
 	{
 		this.Disconnect();
-		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Connecting to server...", new { connectAddress });
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "🌐 Connecting to server...", new { connectAddress });
 		WebSocketMultiplayerPeer clientPeer = new WebSocketMultiplayerPeer();
 		clientPeer.CreateClient(connectAddress);
 		this.Multiplayer.MultiplayerPeer = clientPeer;
@@ -140,7 +140,7 @@ public partial class NetworkManager : Node
 		this.Status.Value = ConnectionStateEnum.ClientConnecting;
 		try {
 			await source.Task;
-			GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Connected successfully.");
+			GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "🌐 Connected successfully.");
 		} catch (Exception e) {
 			GD.PrintErr(nameof(NetworkManager), " Failed to connect to server. ", e.Message);
 			this.DisconnectFromServer();
@@ -169,14 +169,14 @@ public partial class NetworkManager : Node
 
     private void OnPeerConnected(long peerId)
 	{
-		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), $"Peer #{peerId} connected.");
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), $"🌐 Peer #{peerId} connected.");
 		ConnectedPeer peer = this._connectedPeers[peerId] = new() { Id = peerId };
 		this.EmitSignal(SignalName.PeerConnected, peer);
 	}
 
 	private void OnPeerDisconnected(long id)
 	{
-		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), $"Peer #{id} disconnected.");
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), $"🌐 Peer #{id} disconnected.");
 		ConnectedPeer peer = this._connectedPeers[id];
 		this._connectedPeers.Remove(id);
 		this.EmitSignal(SignalName.PeerDisconnected, peer);
@@ -200,7 +200,7 @@ public partial class NetworkManager : Node
 
 	private void CloseMultiplayerServer()
 	{
-		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Server closed.");
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "🌐 Server closed.");
 		this._BaseDisconnect();
 		this.Multiplayer.PeerConnected -= this.OnPeerConnected;
 		this.Multiplayer.PeerDisconnected -= this.OnPeerDisconnected;
@@ -209,7 +209,7 @@ public partial class NetworkManager : Node
 
 	private void DisconnectFromServer()
 	{
-		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "Disconnected from server.");
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "🌐 Disconnected from server.");
 		this._BaseDisconnect();
 		this.Multiplayer.PeerConnected -= this.OnPeerConnected;
 		this.Multiplayer.PeerDisconnected -= this.OnPeerDisconnected;

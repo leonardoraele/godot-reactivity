@@ -81,10 +81,18 @@ public partial class RpcUtilityManager : Node
 	// UTILITY METHODS
 	// -----------------------------------------------------------------------------------------------------------------
 
-    public void ValidateRpcReceiverIsAuthorityOfNode(Node? node = null)
+	public void ValidateRpcReceiverIsMultiplayerAuthority(Node node)
     {
-		if (!(node ?? this).IsMultiplayerAuthority()) {
-			throw new Exception("Only the authority can call this method.");
+		if (!node.IsMultiplayerAuthority()) {
+			throw new Exception(
+				"Failed to receive Rpc call. Cause: Only the multiplayer authority can call this method."
+				+ new {
+					node = node.GetPath(),
+					receiverId = NetworkManager.Connectivity.LocalPeer.Id,
+					senderId = this.Multiplayer.GetRemoteSenderId(),
+					authorityId = node.GetMultiplayerAuthority(),
+				}
+			);
 		}
     }
 

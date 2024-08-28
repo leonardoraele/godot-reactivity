@@ -153,7 +153,7 @@ public partial class SceneSynchronizationManager : Node
 			);
 			return;
 		}
-		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), $"Peer #{peer.Id} changed scene: '{peer.CurrentScene.Value}' -> '{sceneFilePath}'");
+		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), $"🔀 Peer #{peer.Id} changed scene: '{peer.CurrentScene.Value}' -> '{sceneFilePath}'");
 		string previousScene = peer.CurrentScene.Value;
 		peer.CurrentScene.Value = sceneFilePath;
 		this.EmitSignal(SignalName.PeerChangedScene, peer, previousScene);
@@ -383,7 +383,7 @@ public partial class SceneSynchronizationManager : Node
 		GD.PrintS(
 			NetworkManager.NetId,
 			nameof(SceneSynchronizationManager),
-			"Synchronized scene changed to:", $"'{sceneFilePath}'",
+			"🌐 Synchronized scene changed to:", $"'{sceneFilePath}'",
 			"with args:", args
 		);
 		if (this.SynchronizationEnabled) {
