@@ -38,6 +38,9 @@ public class ReactiveEffect : IDisposable
 		return effect;
     }
 
+	/// <summary>
+	/// Rerun the effect even if the context is not dirty. (i.e. no dependant state has changed)
+	/// </summary>
 	public void ForceRerun(bool deferred = true)
 	{
 		this._context?.Dispose();
@@ -45,6 +48,10 @@ public class ReactiveEffect : IDisposable
 		this.SafeRerun(deferred);
 	}
 
+	/// <summary>
+	/// Rerun the effect only if the context is dirty. (i.e. some dependant state has changed) Calling this is necessary
+	/// to rerun the effect manually if it's disabled.
+	/// </summary>
 	public void SafeRerun(bool deferred = true)
 	{
 		if (deferred) {
