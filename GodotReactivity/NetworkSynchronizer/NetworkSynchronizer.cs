@@ -214,9 +214,9 @@ public partial class NetworkSynchronizer : Node
 		);
 		if (newValues.Count != 0) {
 			if (this.IsMultiplayerAuthority()) {
-				NetworkManager.RpcUtil.SafeRpcToOthers(this, MethodName.RpcSetValues, this.DirtyFlag, newValues);
+				this.SafeRpcToOthers(MethodName.RpcSetValues, this.DirtyFlag, newValues);
 			} else {
-				NetworkManager.RpcUtil.SafeRpcToAuthority(this, MethodName.RpcSetValues, this.DirtyFlag, newValues);
+				this.SafeRpcToAuthority(MethodName.RpcSetValues, this.DirtyFlag, newValues);
 			}
 		}
 		this.DirtyFlag = 0;
@@ -227,9 +227,8 @@ public partial class NetworkSynchronizer : Node
 		if (this.IsMultiplayerAuthority()) {
 			return;
 		}
-		Variant values = await NetworkManager.RpcUtil.BiDiRpcId(
+		Variant values = await this.BiDiRpcId(
 			this.GetMultiplayerAuthority(),
-			this,
 			MethodName.GetLocalValues,
 			uint.MaxValue
 		);
