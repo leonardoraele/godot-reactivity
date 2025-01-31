@@ -14,4 +14,6 @@ public partial class ConnectedPeer : GodotObject
 	public bool IsLocalPeer => NetworkManager.Instance.LocalPeer == this;
 
 	public string DisplayName => $"Player #{this.Id}";
+
+	public override string ToString() => $"ConnectedPeer {{ Id = {this.Id} }}";
 }

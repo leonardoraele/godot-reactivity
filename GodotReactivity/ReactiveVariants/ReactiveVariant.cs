@@ -9,6 +9,11 @@ public class ReactiveVariant : AbstractReactiveVariant
 	public ReactiveVariant() => this._value = new Variant();
 	public ReactiveVariant(Variant value) => this._value = value;
 
+	// It is ok to have implicit read convertion (from ReactiveVariant to Variant), but not the other way around,
+	// because an implicit write convertion (from Variant to ReactiveVariant) could lead to accidental recreation of the
+	// ReactiveVariant object when updating the .Value property was intended.
+	public static implicit operator Variant(ReactiveVariant reactive) => reactive.Value;
+
 	public override Variant VariantValue {
 		get => this.Value;
 		set => this.Value = value;
@@ -27,6 +32,4 @@ public class ReactiveVariant : AbstractReactiveVariant
 			this.NotifyChanged();
 		}
 	}
-
-	public static implicit operator Variant(ReactiveVariant reactiveVariant) => reactiveVariant.Value;
 }

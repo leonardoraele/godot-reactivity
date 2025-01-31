@@ -4,6 +4,8 @@ using System.Linq;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 using Godot;
+using Raele.ColyseusSDK;
+using Raele.GodotReactivity.ExtensionMethods;
 
 namespace Raele.GodotReactivity;
 
@@ -124,13 +126,27 @@ public partial class NetworkManager : Node
 		this.EmitSignal(SignalName.ServerOpened);
 	}
 
-	public async Task ConnectToServer(string connectAddress)
+	public Task ConnectToServer(string connectAddress)
 	{
 		this.Disconnect();
 		GD.PrintS(NetworkManager.NetId, nameof(NetworkManager), "🌐 Connecting to server...", new { connectAddress });
 		WebSocketMultiplayerPeer clientPeer = new WebSocketMultiplayerPeer();
 		clientPeer.CreateClient(connectAddress);
 		this.Multiplayer.MultiplayerPeer = clientPeer;
+		return this._BaseConnectToServer();
+	}
+
+	public async Task ConnectToColyseus(ColyseusRoom room)
+	{
+		ColyseusMultiplayerApi multiplayer = new();
+		this.GetTree().SetMultiplayer(multiplayer, this.GetTree().Root.GetPath());
+		Task connection = this._BaseConnectToServer();
+		await multiplayer.JoinRoom(room);
+		await connection;
+	}
+
+	public async Task _BaseConnectToServer()
+	{
 		TaskCompletionSource source = new();
 		this.Multiplayer.ConnectedToServer += source.SetResult;
 		this.Multiplayer.ConnectionFailed += source.SetCanceled;
@@ -219,7 +235,7 @@ public partial class NetworkManager : Node
 
 	private void _BaseDisconnect()
 	{
-		this._connectedPeers.Clear();
+		this.ConnectedPeers.Values.ForEach(peer => this.OnPeerDisconnected(peer.Id));
 		this.Multiplayer.MultiplayerPeer?.Close();
 		this.Multiplayer.MultiplayerPeer = new OfflineMultiplayerPeer();
 		this.Status.Value = ConnectionStateEnum.Offline;

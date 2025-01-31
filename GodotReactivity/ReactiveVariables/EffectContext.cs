@@ -10,12 +10,7 @@ public class EffectContext : Observable
 	private static Dictionary<Thread, Stack<EffectContext>> ContextByThread = new();
 
 	public static EffectContext? GetContext()
-	{
-		return ContextByThread.TryGetValue(Thread.CurrentThread, out Stack<EffectContext>? stack)
-			&& stack.TryPeek(out EffectContext? context)
-				? context
-				: null;
-	}
+		=> ContextByThread.GetValueOrDefault(Thread.CurrentThread)?.PeekOrDefault();
 
 	public static bool TryGetContext([NotNullWhen(true)] out EffectContext? context)
 	{
@@ -65,4 +60,12 @@ public class EffectContext : Observable
 			dependency.Changed -= this.NotifyChanged;
 		}
 	}
+}
+
+public static class EffectContextExtensions
+{
+	public static T? PeekOrDefault<T>(this Stack<T> stack)
+		=> stack.TryPeek(out T? value) ? value : default;
+	public static T? PopOrDefault<T>(this Stack<T> stack)
+		=> stack.TryPop(out T? value) ? value : default;
 }

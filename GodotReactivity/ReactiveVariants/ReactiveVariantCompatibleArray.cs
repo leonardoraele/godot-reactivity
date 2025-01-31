@@ -12,17 +12,17 @@ public class ReactiveVariantCompatibleArray<T>
 	IReadOnlyCollection<T>,
 	IList<T>,
 	IReadOnlyList<T>
-	where T : IVariantConverter<T>
+	where T : IVariantSerializer<T>
 {
 	public class VariantConvertibleList<LT>
-		: List<LT>, IVariantConverter<VariantConvertibleList<LT>>
-		where LT : IVariantConverter<LT>
+		: List<LT>, IVariantSerializer<VariantConvertibleList<LT>>
+		where LT : IVariantSerializer<LT>
 	{
 		public VariantConvertibleList() : base() {}
 		public VariantConvertibleList(IEnumerable<LT> initialValues) : base(initialValues) {}
 
-		public static VariantConvertibleList<LT> FromVariant(Variant vArray) => new(vArray.AsGodotArray().Select(LT.FromVariant));
-		public static Variant ToVariant(VariantConvertibleList<LT> tList) => new Godot.Collections.Array(tList.Select(LT.ToVariant));
+		public static VariantConvertibleList<LT> Deserialize(Variant vArray) => new(vArray.AsGodotArray().Select(LT.Deserialize));
+		public static Variant Serialize(VariantConvertibleList<LT> tList) => new Godot.Collections.Array(tList.Select(LT.Serialize));
 	}
 
     public ReactiveVariantCompatibleArray() : base(new()) {}
